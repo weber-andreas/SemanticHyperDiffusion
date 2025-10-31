@@ -141,3 +141,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ignore checkpoints, mlp weights and dataset
+mlp_weights/*
+data/

@@ -1,0 +1,37 @@
+# Scientific and data manipulation
+numpy==1.21.6
+pytorch-lightning==1.5.10
+scipy
+pandas
+h5py
+scikit-learn
+trimesh
+scikit-image
+scikit-video
+
+# Visualization and 3D
+matplotlib
+plyfile
+pyglet
+open3d
+trimesh
+rtree
+pyrender
+
+
+# Utilities
+tqdm
+jupyter
+imageio
+imageio-ffmpeg
+einops
+omegaconf
+natsort
+hydra-core
+torchmetrics==0.9.3
+torch-fidelity
+setuptools<81
+
+# Training Visualization
+wandb==0.15.8
+tensorboard

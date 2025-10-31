@@ -5,7 +5,7 @@ from hd_utils import Config, get_mlp
 from hyperdiffusion import HyperDiffusion
 
 # Using it to make pyrender work on clusters
-os.environ["PYOPENGL_PLATFORM"] = "egl"
+# os.environ["PYOPENGL_PLATFORM"] = "egl"
 import sys
 from datetime import datetime
 from os.path import join
@@ -23,7 +23,14 @@ import ldm.ldm.modules.diffusionmodules.openaimodel
 import wandb
 from transformer import Transformer
 
+
 sys.path.append("siren")
+
+DEVICE = torch.device(
+    "cuda:0"
+    if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available() else "cpu"
+)
 
 
 @hydra.main(
@@ -70,7 +77,7 @@ def main(cfg: DictConfig):
             layer_names.append(l)
         model = Transformer(
             layers, layer_names, **Config.config["transformer_config"]["params"]
-        ).cuda()
+        ).to(device=DEVICE)
     # Initialize UNet for Voxel baseline
     else:
         model = ldm.ldm.modules.diffusionmodules.openaimodel.UNetModel(
@@ -193,10 +200,16 @@ def main(cfg: DictConfig):
     # These two dl's are just placeholders, during val and test evaluation we are looking at test_split.lst,
     # val_split.lst files, inside calc_metrics methods
     val_dl = DataLoader(
-        torch.utils.data.Subset(train_dt, [0]), batch_size=1, shuffle=False
+        torch.utils.data.Subset(train_dt, [0]),
+        batch_size=1,
+        shuffle=False,
+        num_workers=8,
     )
     test_dl = DataLoader(
-        torch.utils.data.Subset(train_dt, [0]), batch_size=1, shuffle=False
+        torch.utils.data.Subset(train_dt, [0]),
+        batch_size=1,
+        shuffle=False,
+        num_workers=8,
     )
 
     print(
@@ -250,8 +263,8 @@ def main(cfg: DictConfig):
 
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch")
     trainer = pl.Trainer(
-        accelerator="gpu",
-        devices=torch.cuda.device_count(),
+        accelerator="cpu",
+        devices=1,
         max_epochs=Config.get("epochs"),
         strategy="ddp",
         logger=wandb_logger,

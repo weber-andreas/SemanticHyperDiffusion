@@ -1,0 +1,12 @@
+{
+  "pylint.args": ["--rcfile=.pylintrc "],
+  "mypy-type-checker.args": [
+    "--disallow-untyped-defs=False",
+    "--disallow-untyped-calls=False",
+    "--check-untyped-defs=False",
+    "--no-implicit-optional=False"
+  ],
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda",
+  "python-envs.pythonProjects": []
+}
