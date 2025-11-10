@@ -10,11 +10,20 @@ from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
 import wandb
-from diffusion.gaussian_diffusion import (GaussianDiffusion, LossType,
-                                          ModelMeanType, ModelVarType)
+from diffusion.gaussian_diffusion import (
+    GaussianDiffusion,
+    LossType,
+    ModelMeanType,
+    ModelVarType,
+)
 from evaluation_metrics_3d import compute_all_metrics, compute_all_metrics_4d
-from hd_utils import (Config, calculate_fid_3d, generate_mlp_from_weights,
-                      render_mesh, render_meshes)
+from hd_utils import (
+    Config,
+    calculate_fid_3d,
+    generate_mlp_from_weights,
+    render_mesh,
+    render_meshes,
+)
 from siren import sdf_meshing
 from siren.dataio import anime_read
 from siren.experiment_scripts.test_sdf import SDFDecoder
@@ -71,7 +80,10 @@ class HyperDiffusion(pl.LightningModule):
             scheduler = torch.optim.lr_scheduler.StepLR(
                 optimizer, step_size=self.cfg.scheduler_step, gamma=0.9
             )
-            return [optimizer], [scheduler]
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {"scheduler": scheduler, "interval": "epoch"},
+            }
         return optimizer
 
     def grid_to_mesh(self, grid):
@@ -143,14 +155,15 @@ class HyperDiffusion(pl.LightningModule):
 
         # Output statistics every 100 step
         if self.trainer.global_step % 100 == 0:
-            print(input_data.shape)
-            print(
-                "Orig weights[0].stats",
-                input_data.min().item(),
-                input_data.max().item(),
-                input_data.mean().item(),
-                input_data.std().item(),
-            )
+            # print(input_data.shape)
+            # print(
+            # "Orig weights[0].stats",
+            #     input_data.min().item(),
+            #     input_data.max().item(),
+            #     input_data.mean().item(),
+            #     input_data.std().item(),
+            # )
+            pass
 
         # Sample a diffusion timestep
         t = (
@@ -318,9 +331,11 @@ class HyperDiffusion(pl.LightningModule):
                             sdf_decoder,
                             effective_file_name,
                             N=res,
-                            level=0
-                            if self.mlp_kwargs.output_type in ["occ", "logits"]
-                            else 0,
+                            level=(
+                                0
+                                if self.mlp_kwargs.output_type in ["occ", "logits"]
+                                else 0
+                            ),
                             time_val=i,
                         )  # 0.9
                         if (
@@ -338,9 +353,11 @@ class HyperDiffusion(pl.LightningModule):
                         sdf_decoder,
                         effective_file_name,
                         N=res,
-                        level=level
-                        if self.mlp_kwargs.output_type in ["occ", "logits"]
-                        else 0,
+                        level=(
+                            level
+                            if self.mlp_kwargs.output_type in ["occ", "logits"]
+                            else 0
+                        ),
                     )
                     if (
                         "occ" in self.mlp_kwargs.output_type
@@ -626,16 +643,16 @@ class HyperDiffusion(pl.LightningModule):
         )
         print("Starting metric computation for", split_type)
 
-        fid = calculate_fid_3d(
-            sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
-        )
+        # fid = calculate_fid_3d(
+        #     sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
+        # )
         metrics = compute_all_metrics(
             sample_pcs.to(self.device),
             ref_pcs.to(self.device),
             16 if split_type == "test" else 16,
             self.logger,
         )
-        metrics["fid"] = fid.item()
+        # metrics["fid"] = fid.item()
 
         print("Completed metric computation for", split_type)
 
@@ -712,7 +729,7 @@ class HyperDiffusion(pl.LightningModule):
             x_0s = torch.stack(x_0s).to(self.device)
             flat = x_0s.view(len(x_0s), -1)
             # return
-            print(x_0s.shape, flat.shape)
+            # print(x_0s.shape, flat.shape)
             print("Variance With zero-padding")
             self.print_summary(flat, torch.var)
             print("Variance Without zero-padding")

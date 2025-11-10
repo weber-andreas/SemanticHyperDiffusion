@@ -12,16 +12,14 @@ from Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_normals impo
 from torchmetrics_fid import FrechetInceptionDistance
 
 
-# Using edited 2D-FID code of torch_metrics
-fid = FrechetInceptionDistance(reset_real_features=True)
-
-
 def calculate_fid_3d(
     sample_pcs,
     ref_pcs,
     wandb_logger,
     path="Pointnet_Pointnet2_pytorch/log/classification/pointnet2_ssg_wo_normals/checkpoints/best_model.pth",
 ):
+    # Using edited 2D-FID code of torch_metrics
+    fid = FrechetInceptionDistance(reset_real_features=True)
     batch_size = 10
     point_net = pointnet2_cls_ssg.get_model(40, normal_channel=False)
     checkpoint = torch.load(path)

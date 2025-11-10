@@ -5,7 +5,7 @@ from hd_utils import Config, get_mlp
 from hyperdiffusion import HyperDiffusion
 
 # Using it to make pyrender work on clusters
-# os.environ["PYOPENGL_PLATFORM"] = "egl"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
 import sys
 from datetime import datetime
 from os.path import join
@@ -15,9 +15,9 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from omegaconf import DictConfig
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 
 import ldm.ldm.modules.diffusionmodules.openaimodel
 import wandb
@@ -50,7 +50,7 @@ def main(cfg: DictConfig):
     wandb.init(
         project="hyperdiffusion",
         dir=config["tensorboard_log_dir"],
-        settings=wandb.Settings(_disable_stats=True, _disable_meta=True),
+        settings=wandb.Settings(_disable_stats=False, _disable_meta=False),
         tags=[Config.get("mode")],
         mode="disabled" if Config.get("disable_wandb") else "online",
         config=dict(config),
@@ -167,8 +167,8 @@ def main(cfg: DictConfig):
             train_dt,
             batch_size=Config.get("batch_size"),
             shuffle=True,
-            num_workers=8,
-            pin_memory=True,
+            num_workers=4,
+            pin_memory=False,
         )
         val_dt = WeightDataset(
             mlps_folder_train,
@@ -203,13 +203,13 @@ def main(cfg: DictConfig):
         torch.utils.data.Subset(train_dt, [0]),
         batch_size=1,
         shuffle=False,
-        num_workers=8,
+        num_workers=4,
     )
     test_dl = DataLoader(
         torch.utils.data.Subset(train_dt, [0]),
         batch_size=1,
         shuffle=False,
-        num_workers=8,
+        num_workers=4,
     )
 
     print(
@@ -261,9 +261,9 @@ def main(cfg: DictConfig):
         save_on_train_epoch_end=True,
     )
 
-    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval="epoch")
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
     trainer = pl.Trainer(
-        accelerator="cpu",
+        accelerator="gpu",
         devices=1,
         max_epochs=Config.get("epochs"),
         strategy="ddp",
