@@ -1,6 +1,7 @@
 """
 This file contains the G.pt model and its building blocks (minGPT without masking, etc.).
 """
+
 import math
 from copy import deepcopy
 
@@ -377,7 +378,9 @@ class FrequencyEmbedder(nn.Module):
         N = x.size(0)
         if x.dim() == 1:  # (N,)
             x = x.unsqueeze(1)  # (N, D) where D=1
-        x_unsqueezed = x.unsqueeze(-1).to("cuda", torch.float)  # (N, D, 1)
+        # Move to the same device as the registered frequencies buffer and ensure float dtype.
+        device = self.frequencies.device if hasattr(self, "frequencies") else x.device
+        x_unsqueezed = x.unsqueeze(-1).to(device=device, dtype=torch.float)  # (N, D, 1)
         scaled = (
             self.frequencies.view(1, 1, -1) * x_unsqueezed
         )  # (N, D, num_frequencies)
@@ -390,7 +393,6 @@ class FrequencyEmbedder(nn.Module):
 
 
 class Transformer(nn.Module):
-
     """
     The G.pt model.
     """

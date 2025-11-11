@@ -5,7 +5,6 @@ from hd_utils import Config, get_mlp
 from hyperdiffusion import HyperDiffusion
 
 # Using it to make pyrender work on clusters
-os.environ["PYOPENGL_PLATFORM"] = "egl"
 import sys
 from datetime import datetime
 from os.path import join
@@ -31,6 +30,14 @@ DEVICE = torch.device(
     if torch.cuda.is_available()
     else "mps" if torch.backends.mps.is_available() else "cpu"
 )
+
+# Setting PYOPENGL_PLATFORM based on device
+if DEVICE.type == "cuda":
+    os.environ["PYOPENGL_PLATFORM"] = "egl"
+elif DEVICE.type == "mps":
+    accelerator = "cpu"
+else:
+    accelerator = "cpu"
 
 
 @hydra.main(
@@ -263,7 +270,7 @@ def main(cfg: DictConfig):
 
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
     trainer = pl.Trainer(
-        accelerator="gpu",
+        accelerator=accelerator,
         devices=1,
         max_epochs=Config.get("epochs"),
         strategy="ddp",

@@ -116,14 +116,18 @@ class HyperDiffusion(pl.LightningModule):
                 None,
                 "nerf" if self.mlp_kwargs.model_type == "nerf" else "mlp",
                 self.mlp_kwargs,
+                device=self.device,
             )
-            sdf_decoder.model = mlp.cuda()
+
+            mlp = mlp.to(self.device)
+            sdf_decoder.model = mlp
             if not self.mlp_kwargs.move:
                 sdf_meshing.create_mesh(
                     sdf_decoder,
                     "meshes/first_mesh",
                     N=128,
                     level=0.5 if self.mlp_kwargs.output_type == "occ" else 0,
+                    device=self.device,
                 )
 
             print("Input images shape:", input_data.shape)
@@ -317,8 +321,9 @@ class HyperDiffusion(pl.LightningModule):
                 None,
                 "nerf" if self.mlp_kwargs.model_type == "nerf" else "mlp",
                 self.mlp_kwargs,
+                device=self.device,
             )
-            sdf_decoder.model = mlp.cuda().eval()
+            sdf_decoder.model = mlp.to(self.device).eval()
             with torch.no_grad():
                 effective_file_name = (
                     f"{folder_name}/mesh_epoch_{self.current_epoch}_{i}_{info}"
@@ -337,6 +342,7 @@ class HyperDiffusion(pl.LightningModule):
                                 else 0
                             ),
                             time_val=i,
+                            device=self.device,
                         )  # 0.9
                         if (
                             "occ" in self.mlp_kwargs.output_type
@@ -358,6 +364,7 @@ class HyperDiffusion(pl.LightningModule):
                             if self.mlp_kwargs.output_type in ["occ", "logits"]
                             else 0
                         ),
+                        device=self.device,
                     )
                     if (
                         "occ" in self.mlp_kwargs.output_type

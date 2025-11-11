@@ -16,18 +16,18 @@ timesteps: 500
 epochs: 1500
 scheduler: True
 scheduler_step: 200
-best_model_save_path: 
+best_model_save_path:
 mode: train
 mlps_folder_train: ./mlp_weights/3d_128_plane_multires_4_manifoldplus_slower_no_clipgrad
-model_resume_path: ./lightning_checkpoints/2025-11-08 17-29-02.724423-treasured-energy-72-lgclh5x6/best-val-nn-epoch=14-train_loss=0.31-val_fid=0.00.ckpt
+model_resume_path:
 sampling: ddim
 val_fid_calculation_period: 15
 lr: 2e-4
 batch_size: 8
-accumulate_grad_batches: 1
+accumulate_grad_batches: 2
 val:
   num_points: 2048
-  num_samples: 20
+  num_samples: 40
 mlp_config:
   params:
     model_type: mlp_3d
@@ -48,9 +48,9 @@ diff_config:
     loss_type: MSE
 transformer_config:
   params:
-    n_embd: 2048
-    n_layer: 12
+    n_embd: 64
+    n_layer: 4
     n_head: 16
     split_policy: layer_by_layer
     use_global_residual: False
-    condition: 'no'
+    condition: "no"
