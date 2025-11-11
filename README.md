@@ -33,7 +33,7 @@ conda create -n hyperdiffusion python=3.9
 conda activate hyperdiffusion
 
 # Simple python geometry processing library
-conda install -c conda-forge igl
+conda install -c conda-forge igl==2.2.1
 
 # install other requirements via pip
 pip install "pip<24.1"
