@@ -1,11 +1,11 @@
+import io
 from math import ceil
 
 import numpy as np
-import pyrender
 import torch
-import trimesh
-
+import pyrender
 from mlp_models import MLP, MLP3D
+from PIL import Image
 from Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_normals import (
     pointnet2_cls_ssg,
 )
@@ -93,31 +93,22 @@ def generate_mlp_from_weights(weights, mlp_kwargs):
 def render_meshes(meshes):
     out_imgs = []
     for mesh in meshes:
-        img, _ = render_mesh(mesh)
+        img = render_mesh(mesh)
         out_imgs.append(img)
     return out_imgs
 
 
 def render_mesh(obj):
-    if isinstance(obj, trimesh.Trimesh):
-        # Handle mesh rendering
-        mesh = pyrender.Mesh.from_trimesh(
-            obj,
-            material=pyrender.MetallicRoughnessMaterial(
-                alphaMode="BLEND",
-                baseColorFactor=[1, 0.3, 0.3, 1.0],
-                metallicFactor=0.2,
-                roughnessFactor=0.8,
-            ),
-        )
-    else:
-        # Handle point cloud rendering, (converting it into a mesh instance)
-        pts = obj
-        sm = trimesh.creation.uv_sphere(radius=0.01)
-        sm.visual.vertex_colors = [1.0, 0.0, 0.0]
-        tfs = np.tile(np.eye(4), (len(pts), 1, 1))
-        tfs[:, :3, 3] = pts
-        mesh = pyrender.Mesh.from_trimesh(sm, poses=tfs)
+    # Convert to pyrender mesh
+    mesh = pyrender.Mesh.from_trimesh(
+        obj,
+        material=pyrender.MetallicRoughnessMaterial(
+            alphaMode="BLEND",
+            baseColorFactor=[1, 0.3, 0.3, 1.0],
+            metallicFactor=0.2,
+            roughnessFactor=0.8,
+        ),
+    )
 
     scene = pyrender.Scene()
     scene.add(mesh)
@@ -133,7 +124,7 @@ def render_mesh(obj):
     r = pyrender.OffscreenRenderer(800, 800)
     color, depth = r.render(scene)
     r.delete()
-    return color, depth
+    return color
 
 
 # Calculate look-at matrix for rendering

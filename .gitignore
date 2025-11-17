@@ -11,6 +11,7 @@ meshes
 lightning_checkpoints
 *.ckpt
 .github/workflows
+datasets/PartAnnotation
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -145,3 +146,5 @@ dmypy.json
 # Ignore checkpoints, mlp weights and dataset
 mlp_weights/*
 data/
+
+.DS_Store

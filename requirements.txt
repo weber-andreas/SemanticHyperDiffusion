@@ -12,7 +12,7 @@ scikit-video
 # Visualization and 3D
 matplotlib
 plyfile
-pyglet
+pyglet==1.5.27
 open3d
 trimesh
 rtree

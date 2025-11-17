@@ -210,7 +210,8 @@ class HyperDiffusion(pl.LightningModule):
 
         # Handle 3D/4D sample generation
         if self.method == "hyper_3d":
-            if self.current_epoch % 10 == 0:
+            # every 100 epochs generate samples
+            if self.current_epoch % 20 == 0:
                 x_0s = (
                     self.diff.ddim_sample_loop(self.model, (4, *self.image_size[1:]))
                     .cpu()
