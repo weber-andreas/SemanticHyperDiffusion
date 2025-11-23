@@ -10,8 +10,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from embedder import Embedder
-from mlp_models import MLP
+from src.mlp_models import MLP
 
 
 class SelfAttention(nn.Module):

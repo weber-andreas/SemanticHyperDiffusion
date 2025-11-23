@@ -10,13 +10,13 @@ from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
 import wandb
-from src.external.diffusion.gaussian_diffusion import (
+from external.diffusion.gaussian_diffusion import (
     GaussianDiffusion,
     LossType,
     ModelMeanType,
     ModelVarType,
 )
-from src.evaluation_metrics_3d import compute_all_metrics, compute_all_metrics_4d
+from external.evaluation_metrics_3d import compute_all_metrics, compute_all_metrics_4d
 from src.hd_utils import (
     Config,
     calculate_fid_3d,
@@ -24,9 +24,9 @@ from src.hd_utils import (
     render_mesh,
     render_meshes,
 )
-from src.external.siren import sdf_meshing
-from src.external.siren.dataio import anime_read
-from src.external.siren.experiment_scripts.test_sdf import SDFDecoder
+from external.siren import sdf_meshing
+from external.siren.dataio import anime_read
+from external.siren.experiment_scripts.test_sdf import SDFDecoder
 
 
 class HyperDiffusion(pl.LightningModule):
