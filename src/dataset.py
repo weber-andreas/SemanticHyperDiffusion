@@ -8,9 +8,9 @@ import trimesh
 from torch.utils.data import Dataset
 from trimesh.voxel import creation as vox_creation
 
-from augment import random_permute_flat, random_permute_mlp, sorted_permute_mlp
-from hd_utils import generate_mlp_from_weights, get_mlp
-from external.siren.dataio import anime_read
+from src.augment import random_permute_flat, random_permute_mlp, sorted_permute_mlp
+from src.hd_utils import generate_mlp_from_weights, get_mlp
+from src.external.siren.dataio import anime_read
 
 
 class VoxelDataset(Dataset):
@@ -164,8 +164,14 @@ class WeightDataset(Dataset):
                     continue
                 # Check if file is in corresponding split (train, test, val)
                 # In fact, only train split is important here because we don't use test or val MLP weights
-                if ("_" in file and (file.split("_")[1] in object_names or (
-                        file.split("_")[1] + "_" + file.split("_")[2]) in object_names)) or (file in object_names):
+                if (
+                    "_" in file
+                    and (
+                        file.split("_")[1] in object_names
+                        or (file.split("_")[1] + "_" + file.split("_")[2])
+                        in object_names
+                    )
+                ) or (file in object_names):
                     self.mlp_files.append(file)
         self.transform = None
         self.logger = wandb_logger

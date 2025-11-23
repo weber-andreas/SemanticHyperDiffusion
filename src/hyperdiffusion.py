@@ -10,23 +10,23 @@ from scipy.spatial.transform import Rotation
 from tqdm import tqdm
 
 import wandb
-from external.diffusion.gaussian_diffusion import (
+from src.external.diffusion.gaussian_diffusion import (
     GaussianDiffusion,
     LossType,
     ModelMeanType,
     ModelVarType,
 )
-from evaluation_metrics_3d import compute_all_metrics, compute_all_metrics_4d
-from hd_utils import (
+from src.evaluation_metrics_3d import compute_all_metrics, compute_all_metrics_4d
+from src.hd_utils import (
     Config,
     calculate_fid_3d,
     generate_mlp_from_weights,
     render_mesh,
     render_meshes,
 )
-from external.siren import sdf_meshing
-from external.siren.dataio import anime_read
-from external.siren.experiment_scripts.test_sdf import SDFDecoder
+from src.external.siren import sdf_meshing
+from src.external.siren.dataio import anime_read
+from src.external.siren.experiment_scripts.test_sdf import SDFDecoder
 
 
 class HyperDiffusion(pl.LightningModule):
@@ -651,16 +651,16 @@ class HyperDiffusion(pl.LightningModule):
         )
         print("Starting metric computation for", split_type)
 
-        # fid = calculate_fid_3d(
-        #     sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
-        # )
+        fid = calculate_fid_3d(
+            sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
+        )
         metrics = compute_all_metrics(
             sample_pcs.to(self.device),
             ref_pcs.to(self.device),
             16 if split_type == "test" else 16,
             self.logger,
         )
-        # metrics["fid"] = fid.item()
+        metrics["fid"] = fid.item()
 
         print("Completed metric computation for", split_type)
 

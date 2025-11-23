@@ -1,22 +1,20 @@
-import io
 from math import ceil
 
 import numpy as np
 import torch
 import pyrender
-from mlp_models import MLP, MLP3D
-from PIL import Image
-from external.Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_normals import (
+from src.mlp_models import MLP, MLP3D
+from src.external.Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_normals import (
     pointnet2_cls_ssg,
 )
-from torchmetrics_fid import FrechetInceptionDistance
+from src.external.torchmetrics_fid import FrechetInceptionDistance
 
 
 def calculate_fid_3d(
     sample_pcs,
     ref_pcs,
     wandb_logger,
-    path="external/Pointnet_Pointnet2_pytorch/log/classification/pointnet2_ssg_wo_normals/checkpoints/best_model.pth",
+    path="src/external/Pointnet_Pointnet2_pytorch/log/classification/pointnet2_ssg_wo_normals/checkpoints/best_model.pth",
 ):
     # Using edited 2D-FID code of torch_metrics
     fid = FrechetInceptionDistance(reset_real_features=True)

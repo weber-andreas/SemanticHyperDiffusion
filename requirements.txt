@@ -1,3 +1,6 @@
+# Tested on python version 3.9.23
+
+
 # Scientific and data manipulation
 numpy==1.21.6
 pytorch-lightning==1.5.10

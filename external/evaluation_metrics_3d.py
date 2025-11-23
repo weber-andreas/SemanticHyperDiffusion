@@ -3,20 +3,16 @@
 """
 From https://github.com/stevenygd/PointFlow/tree/master/metrics
 """
-import os
 import warnings
 
 import numpy as np
 import torch
-import trimesh
 from numpy.linalg import norm
-from scipy.spatial.transform import Rotation
 from scipy.stats import entropy
 from sklearn.neighbors import NearestNeighbors
 from tqdm.auto import tqdm
 
 import wandb
-
 
 
 def emd_approx(sample, ref):

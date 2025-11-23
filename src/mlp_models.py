@@ -1,12 +1,11 @@
-import copy
+"""Multi Layer Perceptron for encoding of 3D and 4D shapes."""
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import distributions as dist
 from torch import nn
 
-from embedder import Embedder
+from src.embedder import Embedder
 
 
 class MLP(nn.Module):
