@@ -4,22 +4,18 @@
 import os
 import sys
 from pathlib import Path
-
-from mlp_models import MLP3D
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-sys.path.append(
-    os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    )
-)
-
 import torch
 
+siren_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+external_dir_path = os.path.dirname(siren_dir_path)
+root_dir_path = os.path.dirname(external_dir_path)
+
+sys.path.append(siren_dir_path)
+sys.path.append(external_dir_path)
+sys.path.append(root_dir_path)
+
 from external.siren import sdf_meshing, utils
+from src.mlp_models import MLP3D
 
 
 class SDFDecoder(torch.nn.Module):

@@ -18,6 +18,7 @@ from src.hd_utils import Config, get_mlp
 from src.hyperdiffusion import HyperDiffusion
 from src.transformer import Transformer
 
+
 DEVICE = torch.device(
     "cuda:0"
     if torch.cuda.is_available()

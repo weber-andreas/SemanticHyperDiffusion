@@ -1,35 +1,39 @@
-"""Reproduces Sec. 4.2 in main paper and Sec. 4 in Supplement.
-"""
+"""Reproduces Sec. 4.2 in main paper and Sec. 4 in Supplement."""
+
 import copy
 import os
-# Enable import from parent package
-import sys
-from functools import partial
-
 import hydra
+import numpy as np
 import torch
 import trimesh
 from omegaconf import DictConfig, open_dict
-
-import wandb
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
-sys.path.append(
-    os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    )
-)
-import numpy as np
 from scipy.spatial.transform import Rotation
 from torch.utils.data import DataLoader
+from functools import partial
+import wandb
 
-from hd_utils import render_mesh
-from mlp_models import MLP3D
+# Enable import from parent package
+import sys
+
+siren_dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+external_dir_path = os.path.dirname(siren_dir_path)
+root_dir_path = os.path.dirname(external_dir_path)
+
+sys.path.append(siren_dir_path)
+sys.path.append(external_dir_path)
+sys.path.append(root_dir_path)
+
+
 from external.siren import dataio, loss_functions, sdf_meshing, training, utils
 from external.siren.experiment_scripts.test_sdf import SDFDecoder
+from src.hd_utils import render_mesh
+from src.mlp_models import MLP3D
+
+DEVICE = torch.device(
+    "cuda:0"
+    if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available() else "cpu"
+)
 
 
 def get_model(cfg):
@@ -44,7 +48,7 @@ def get_model(cfg):
 
 @hydra.main(
     version_base=None,
-    config_path="../../configs/overfitting_configs",
+    config_path="../../../configs/overfitting_configs",
     config_name="overfit_plane",
 )
 def main(cfg: DictConfig):
@@ -61,7 +65,7 @@ def main(cfg: DictConfig):
     with open_dict(cfg):
         cfg.mlp_config.output_type = cfg.output_type
     curr_lr = cfg.lr
-    root_path = os.path.join(cfg.logging_root, cfg.exp_name)
+    logging_root_path = os.path.join(cfg.logging_root, cfg.exp_name)
     mesh_jitter = cfg.mesh_jitter
     multip_cfg = cfg.multi_process
     files = [
@@ -69,6 +73,7 @@ def main(cfg: DictConfig):
         for file in os.listdir(cfg.dataset_folder)
         if file not in ["train_split.lst", "test_split.lst", "val_split.lst"]
     ]
+
     if multip_cfg.enabled:
         if multip_cfg.ignore_first:
             files = files[1:]  # Ignoring the first one
@@ -79,7 +84,7 @@ def main(cfg: DictConfig):
         files = files[start_index:end_index]
         if cfg.strategy == "first_weights":
             first_state_dict = torch.load(
-                os.path.join(root_path, multip_cfg.first_weights_name)
+                os.path.join(logging_root_path, multip_cfg.first_weights_name)
             )
         print(
             f"Proc {multip_cfg.part_id} is responsible between {start_index} -> {end_index}"
@@ -90,6 +95,7 @@ def main(cfg: DictConfig):
         os.path.join(cfg.dataset_folder, "train_split.lst"), dtype="str"
     )
     train_object_names = set(train_object_names)
+
     for i, file in enumerate(files):
         # We used to have mesh jittering for augmentation but not using it anymore
         for j in range(10 if mesh_jitter and i > 0 else 1):
@@ -124,7 +130,7 @@ def main(cfg: DictConfig):
                 continue
 
             # Define the model.
-            model = get_model(cfg).cuda()
+            model = get_model(cfg).to(DEVICE)
 
             # Define the loss
             loss_fn = loss_functions.sdf
@@ -138,7 +144,9 @@ def main(cfg: DictConfig):
             summary_fn = utils.wandb_sdf_summary
 
             filename = f"{cfg.output_type}_{filename}"
-            checkpoint_path = os.path.join(root_path, f"{filename}_model_final.pth")
+            checkpoint_path = os.path.join(
+                logging_root_path, f"{filename}_model_final.pth"
+            )
             if os.path.exists(checkpoint_path):
                 print("Checkpoint exists:", checkpoint_path)
                 continue
@@ -175,7 +183,7 @@ def main(cfg: DictConfig):
                 lr=curr_lr,
                 steps_til_summary=cfg.steps_til_summary,
                 epochs_til_checkpoint=cfg.epochs_til_ckpt,
-                model_dir=root_path,
+                model_dir=logging_root_path,
                 loss_fn=loss_fn,
                 summary_fn=summary_fn,
                 double_precision=False,
@@ -223,7 +231,8 @@ def main(cfg: DictConfig):
                     cfg,
                 )
                 os.makedirs(
-                    os.path.join(cfg.logging_root, f"{cfg.exp_name}_ply"), exist_ok=True
+                    os.path.join(cfg.logging_root, f"{cfg.exp_name}_ply"),
+                    exist_ok=True,
                 )
                 if cfg.mlp_config.move:
                     imgs = []
@@ -236,9 +245,11 @@ def main(cfg: DictConfig):
                                 filename + "_" + str(time_val),
                             ),
                             N=256,
-                            level=0.5
-                            if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
-                            else 0,
+                            level=(
+                                0.5
+                                if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
+                                else 0
+                            ),
                             time_val=time_val,
                         )
                         rot_matrix = Rotation.from_euler(
@@ -256,11 +267,17 @@ def main(cfg: DictConfig):
                 else:
                     sdf_meshing.create_mesh(
                         sdf_decoder,
-                        os.path.join(cfg.logging_root, f"{cfg.exp_name}_ply", filename),
+                        os.path.join(
+                            cfg.logging_root,
+                            f"{cfg.exp_name}_ply",
+                            filename,
+                        ),
                         N=256,
-                        level=0
-                        if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
-                        else 0,
+                        level=(
+                            0
+                            if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
+                            else 0
+                        ),
                     )
 
 
