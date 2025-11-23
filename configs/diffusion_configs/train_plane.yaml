@@ -7,6 +7,7 @@ filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
 disable_wandb: False
 dataset_dir: ./data/baseline
 dataset: 02691156
+split_suffix: _small 
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0
@@ -19,7 +20,7 @@ scheduler_step: 200
 best_model_save_path:
 mode: train
 mlps_folder_train: ./mlp_weights/3d_128_plane_multires_4_manifoldplus_slower_no_clipgrad
-model_resume_path: ./lightning_checkpoints/2025-11-12 16-46-36.879329-rosy-meadow-98-u60w90wl/best-val-nn-epoch=44-train_loss=0.27-val_fid=0.00.ckpt
+model_resume_path: 
 sampling: ddim
 val_fid_calculation_period: 15
 lr: 2e-4
@@ -48,8 +49,8 @@ diff_config:
     loss_type: MSE
 transformer_config:
   params:
-    n_embd: 64
-    n_layer: 4
+    n_embd: 1024
+    n_layer: 12
     n_head: 16
     split_policy: layer_by_layer
     use_global_residual: False

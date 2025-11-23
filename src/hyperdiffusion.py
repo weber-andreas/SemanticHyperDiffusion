@@ -218,13 +218,13 @@ class HyperDiffusion(pl.LightningModule):
                     .float()
                 )
                 x_0s = x_0s / self.cfg.normalization_factor
-                print(
-                    "x_0s[0].stats",
-                    x_0s.min().item(),
-                    x_0s.max().item(),
-                    x_0s.mean().item(),
-                    x_0s.std().item(),
-                )
+                # print(
+                #     "x_0s[0].stats",
+                #     x_0s.min().item(),
+                #     x_0s.max().item(),
+                #     x_0s.mean().item(),
+                #     x_0s.std().item(),
+                # )
                 if self.mlp_kwargs.move:
                     for i, x_0 in enumerate(x_0s):
                         out_imgs = []
@@ -272,13 +272,13 @@ class HyperDiffusion(pl.LightningModule):
                     .cpu()
                     .float()
                 )
-                print(
-                    "x_0s[0].stats",
-                    x_0s.min().item(),
-                    x_0s.max().item(),
-                    x_0s.mean().item(),
-                    x_0s.std().item(),
-                )
+                # print(
+                #     "x_0s[0].stats",
+                #     x_0s.min().item(),
+                #     x_0s.max().item(),
+                #     x_0s.mean().item(),
+                #     x_0s.std().item(),
+                # )
                 if self.cfg.mlp_config.params.move:
                     rot_matrix = Rotation.from_euler("zyx", [45, 180, 90], degrees=True)
                     for i, voxel_frames in enumerate(x_0s):
@@ -685,13 +685,13 @@ class HyperDiffusion(pl.LightningModule):
                 .cpu()
                 .float()
             )
-            print(
-                "x_0s[0].stats",
-                x_0s.min().item(),
-                x_0s.max().item(),
-                x_0s.mean().item(),
-                x_0s.std().item(),
-            )
+            # print(
+            #     "x_0s[0].stats",
+            #     x_0s.min().item(),
+            #     x_0s.max().item(),
+            #     x_0s.mean().item(),
+            #     x_0s.std().item(),
+            # )
             os.makedirs(f"gen_meshes/{wandb.run.name}")
 
             if self.cfg.mlp_config.params.move:
@@ -761,13 +761,13 @@ class HyperDiffusion(pl.LightningModule):
             )
             x_0s = x_0s / self.cfg.normalization_factor
 
-            print(
-                "x_0s[0].stats",
-                x_0s.min().item(),
-                x_0s.max().item(),
-                x_0s.mean().item(),
-                x_0s.std().item(),
-            )
+            # print(
+            #     "x_0s[0].stats",
+            #     x_0s.min().item(),
+            #     x_0s.max().item(),
+            #     x_0s.mean().item(),
+            #     x_0s.std().item(),
+            # )
             out_pc_imgs = []
 
             # Handle 4D generation

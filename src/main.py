@@ -1,7 +1,9 @@
 import os
-from datetime import datetime
-from os.path import join
+import sys
 
+sys.path.append(os.path.abspath("external"))
+
+from datetime import datetime
 import hydra
 import numpy as np
 import pytorch_lightning as pl
@@ -58,7 +60,7 @@ def main(cfg: DictConfig):
     )
 
     wandb_logger = WandbLogger()
-    wandb_logger.log_text("config", ["config"], [[str(config)]])
+    wandb_logger.log_text("config", ["config"], [[str(Config.config)]])
     print("wandb", wandb.run.name, wandb.run.id)
 
     train_dt = val_dt = test_dt = None
@@ -84,9 +86,13 @@ def main(cfg: DictConfig):
         model = openaimodel.UNetModel(**Config.config["unet_config"]["params"]).float()
 
     dataset_path = os.path.join(Config.config["dataset_dir"], Config.config["dataset"])
-    train_object_names = np.genfromtxt(
-        os.path.join(dataset_path, "train_split.lst"), dtype="str"
-    )
+    split_suffix = cfg.split_suffix if cfg.split_suffix else ""
+
+    train_split_path = os.path.join(dataset_path, f"train_split{split_suffix}.lst")
+    val_split_path = os.path.join(dataset_path, f"val_split{split_suffix}.lst")
+    test_split_path = os.path.join(dataset_path, f"test_split{split_suffix}.lst")
+
+    train_object_names = np.genfromtxt(train_split_path, dtype="str")
     if not cfg.mlp_config.params.move:
         train_object_names = set([str.split(".")[0] for str in train_object_names])
 
@@ -99,7 +105,8 @@ def main(cfg: DictConfig):
         val_size = int(total_size * 0.05)
         test_size = int(total_size * 0.15)
         train_size = total_size - val_size - test_size
-        if not os.path.exists(os.path.join(dataset_path, "train_split.lst")):
+
+        if not os.path.exists(train_split_path):
             train_idx = np.random.choice(
                 total_size, train_size + val_size, replace=False
             )
@@ -126,33 +133,28 @@ def main(cfg: DictConfig):
             )
 
             np.savetxt(
-                os.path.join(dataset_path, "train_split.lst"),
+                train_split_path,
                 all_object_names[list(train_idx)],
                 delimiter=" ",
                 fmt="%s",
             )
             np.savetxt(
-                os.path.join(dataset_path, "val_split.lst"),
+                val_split_path,
                 all_object_names[list(val_idx)],
                 delimiter=" ",
                 fmt="%s",
             )
             np.savetxt(
-                os.path.join(dataset_path, "test_split.lst"),
+                test_split_path,
                 all_object_names[list(test_idx)],
                 delimiter=" ",
                 fmt="%s",
             )
 
-        val_object_names = np.genfromtxt(
-            os.path.join(dataset_path, "val_split.lst"), dtype="str"
-        )
+        val_object_names = np.genfromtxt(val_split_path, dtype="str")
         val_object_names = set([str.split(".")[0] for str in val_object_names])
-        test_object_names = np.genfromtxt(
-            os.path.join(dataset_path, "test_split.lst"), dtype="str"
-        )
+        test_object_names = np.genfromtxt(test_split_path, dtype="str")
         test_object_names = set([str.split(".")[0] for str in test_object_names])
-        # assert len(train_object_names) == train_size, f"{len(train_object_names)} {train_size}"
 
         train_dt = WeightDataset(
             mlps_folder_train,
@@ -233,8 +235,8 @@ def main(cfg: DictConfig):
     )
 
     # Specify where to save checkpoints
-    checkpoint_path = join(
-        config["tensorboard_log_dir"],
+    checkpoint_path = os.path.join(
+        Config.config["tensorboard_log_dir"],
         "lightning_checkpoints",
         f"{str(datetime.now()).replace(':', '-') + '-' + wandb.run.name + '-' + wandb.run.id}",
     )

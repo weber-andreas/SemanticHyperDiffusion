@@ -84,7 +84,7 @@ Download **Checkpoints** folder from [Drive](https://drive.google.com/drive/fold
 to start evaluating, airplane category:
 
 ```commandline
-python main.py --config-name=train_plane mode=test best_model_save_path=mlp_weights/plane-001.ckpt
+python src/main.py --config-name=train_plane mode=test best_model_save_path=mlp_weights/plane-001.ckpt
 ```
 
 (_checkpoints coming soon!_) car category:
@@ -110,7 +110,7 @@ python main.py --config-name=train_4d_animals mode=test best_model_save_path=<pa
 To start training, airplane category:
 
 ```commandline
-python main.py --config-name=train_plane
+python src/main.py --config-name=train_plane
 ```
 
 (_MLP weights coming soon_) car category:

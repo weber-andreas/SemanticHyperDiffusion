@@ -10,7 +10,7 @@ from trimesh.voxel import creation as vox_creation
 
 from src.augment import random_permute_flat, random_permute_mlp, sorted_permute_mlp
 from src.hd_utils import generate_mlp_from_weights, get_mlp
-from src.external.siren.dataio import anime_read
+from external.siren.dataio import anime_read
 
 
 class VoxelDataset(Dataset):

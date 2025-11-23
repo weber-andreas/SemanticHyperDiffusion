@@ -1,9 +1,11 @@
+import logging
 from math import ceil
 
 import numpy as np
 import torch
 import pyrender
 from src.mlp_models import MLP, MLP3D
+
 from external.Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_normals import (
     pointnet2_cls_ssg,
 )
@@ -97,6 +99,7 @@ def render_meshes(meshes):
 
 
 def render_mesh(obj):
+    logging.info("Rendering mesh")
     # Convert to pyrender mesh
     mesh = pyrender.Mesh.from_trimesh(
         obj,
