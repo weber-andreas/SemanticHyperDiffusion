@@ -18,12 +18,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
-import ldm.ldm.modules.diffusionmodules.openaimodel
 import wandb
 from transformer import Transformer
 
-
-sys.path.append("siren")
 
 DEVICE = torch.device(
     "cuda:0"
@@ -42,7 +39,7 @@ else:
 
 @hydra.main(
     version_base=None,
-    config_path="configs/diffusion_configs",
+    config_path="../configs/diffusion_configs",
     config_name="train_plane",
 )
 def main(cfg: DictConfig):
@@ -87,7 +84,7 @@ def main(cfg: DictConfig):
         ).to(device=DEVICE)
     # Initialize UNet for Voxel baseline
     else:
-        model = ldm.ldm.modules.diffusionmodules.openaimodel.UNetModel(
+        model = external.ldm.ldm.modules.diffusionmodules.openaimodel.UNetModel(
             **Config.config["unet_config"]["params"]
         ).float()
 

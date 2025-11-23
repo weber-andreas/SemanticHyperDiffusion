@@ -28,8 +28,8 @@ from torch.utils.data import DataLoader
 
 from hd_utils import render_mesh
 from mlp_models import MLP3D
-from siren import dataio, loss_functions, sdf_meshing, training, utils
-from siren.experiment_scripts.test_sdf import SDFDecoder
+from external.siren import dataio, loss_functions, sdf_meshing, training, utils
+from external.siren.experiment_scripts.test_sdf import SDFDecoder
 
 
 def get_model(cfg):

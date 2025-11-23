@@ -1,5 +1,6 @@
 """Visualization of ShapeNetPart dataset"""
 
+from typing import Any
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 import natsort
+import argparse
 
 
 def get_file_id(point_cloud_file: str) -> str:
@@ -21,7 +23,7 @@ def get_file_id(point_cloud_file: str) -> str:
     return file_id
 
 
-def load_point_clouds(
+def load_point_cloud(
     base_path: pathlib.Path,
     category: str,
     meta_data: dict,
@@ -133,6 +135,40 @@ def visualize_pointcloud_3d(point_cloud: np.ndarray, labels: list[str]) -> None:
     fig.show()
 
 
+def visualize_single_pointcloud(
+    metadata: dict,
+    base_path: pathlib.Path,
+    category: str = "Airplane",
+    visualize_2d: bool = False,
+    object_index: Optional[int] = None,
+    file_id: Optional[str] = "1a888c2c86248bbcf2b0736dd4d8afe0",
+) -> None:
+    """Visualize a single point cloud with its labels."""
+    if file_id:
+        attr_filter = {"file_id": file_id}
+    elif object_index:
+        attr_filter = {"specific_index": object_index}
+    else:
+        raise ValueError("File ID or object index must be provided.")
+
+    # Object categories
+    object_categories = set(metadata.keys())
+    logging.info("Object categories found: %s", object_categories)
+    assert category in object_categories, f"Category {category} not found in metadata."
+
+    point_cloud, point_cloud_labels = load_point_cloud(
+        **attr_filter,  # either file_id or specific_index
+        base_path=base_path,
+        category=category,
+        meta_data=metadata,
+    )
+
+    if visualize_2d:
+        visualize_pointcloud_2d(point_cloud, point_cloud_labels)
+    else:
+        visualize_pointcloud_3d(point_cloud, point_cloud_labels)
+
+
 def visualize_pointcloud_2d(point_cloud: np.ndarray, labels: list[str]) -> None:
     """Visualize point cloud data using Matplotlib in 2D."""
     if point_cloud.shape[1] < 2:
@@ -194,7 +230,7 @@ def visualize_category_matrix(
         while object_counts < num_objects:
             ax = axes[i, j]
             try:
-                point_cloud, labels = load_point_clouds(
+                point_cloud, labels = load_point_cloud(
                     base_path=base_path,
                     meta_data=meta_data,
                     category=category,
@@ -226,39 +262,82 @@ def visualize_category_matrix(
 
             j += 1
     plt.tight_layout()
-    plt.savefig("category_matrix.png", dpi=600, bbox_inches="tight")
-    # plt.show()
+    plt.savefig(base_path / "category_matrix.png", dpi=600, bbox_inches="tight")
+    plt.show()
+
+
+def main(args: dict[str, Any]):
+    base_path = pathlib.Path("./data/shapenetpart/PartAnnotation")
+    metadata_path = base_path / "metadata.json"
+    metadata = load_meta_data(metadata_path)
+
+    if args.single_object:
+        if len(args.categories) > 1:
+            raise ValueError(
+                "Only one category can be specified for single object visualization."
+            )
+        visualize_single_pointcloud(
+            metadata=metadata,
+            base_path=base_path,
+            object_index=args.object_index,
+            file_id=args.file_id,
+            category=args.categories[0],
+            visualize_2d=args.visualize_2d,
+        )
+    elif args.category_matrix:
+        visualize_category_matrix(
+            categories=args.categories,
+            base_path=base_path,
+            meta_data=metadata,
+            num_objects=7,
+        )
+    else:
+        raise ValueError("Invalid arguments.")
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    base_path = pathlib.Path("PartAnnotation")
-    metadata_path = base_path / "metadata.json"
-    metadata = load_meta_data(metadata_path)
+    parser = argparse.ArgumentParser()
 
-    # Object categories
-    category = "Airplane"
-    object_categories = set(metadata.keys())
-    logging.info("Object categories found: %s", object_categories)
-    assert category in object_categories, f"Category {category} not found in metadata."
-
-    point_cloud, point_cloud_labels = load_point_clouds(
-        specific_index=3,
-        # file_id="1a888c2c86248bbcf2b0736dd4d8afe0",
-        base_path=base_path,
-        category=category,
-        meta_data=metadata,
+    # Create a mutually exclusive group for the main modes
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        "--single_object",
+        action="store_true",
+        help="Visualize a single object.",
     )
-    # Visualize in 3D
-    # visualize_pointcloud_3d(point_cloud, point_cloud_labels)
+    mode_group.add_argument(
+        "--category_matrix",
+        action="store_true",
+        help="Visualize a matrix of different objects and categories.",
+    )
 
-    # Visualize in 2D (e.g., XY plane)
-    visualize_pointcloud_2d(point_cloud[:, :2], point_cloud_labels)
+    # Arguments for single object mode
+    parser.add_argument(
+        "--object_index",
+        type=int,
+        default=3,
+        help="Index of object to visualize.",
+    )
+    parser.add_argument(
+        "--file_id",
+        type=str,
+        default="1a888c2c86248bbcf2b0736dd4d8afe0",
+        help="File ID of object to visualize.",
+    )
+    parser.add_argument(
+        "--categories",
+        type=str,
+        default="Airplane",
+        help="List of categories to visualize, e.g. 'Airplane' 'Chair'",
+    )
+    parser.add_argument(
+        "--visualize_2d",
+        action="store_true",
+        default=False,
+        help="Visualize point cloud in 2D.",
+    )
+    args = parser.parse_args()
+    args.categories = args.categories.split(" ")
 
-    # Visualize a matrix of different objects and categories
-    # visualize_category_matrix(
-    #     categories=["Airplane", "Chair", "Car", "Motorbike", "Lamp", "Rocket"],
-    #     base_path=base_path,
-    #     meta_data=metadata,
-    #     num_objects=7,
-    # )
+    main(args)

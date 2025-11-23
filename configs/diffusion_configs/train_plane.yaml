@@ -3,9 +3,9 @@ calculate_metric_on_test: True
 dedup: False
 test_sample_mult: 1.1
 filter_bad: True
-filter_bad_path: ./data/plane_problematic_shapes.txt
+filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
 disable_wandb: False
-dataset_dir: ./data
+dataset_dir: ./data/baseline
 dataset: 02691156
 tensorboard_log_dir: .
 augment: False
@@ -19,7 +19,7 @@ scheduler_step: 200
 best_model_save_path:
 mode: train
 mlps_folder_train: ./mlp_weights/3d_128_plane_multires_4_manifoldplus_slower_no_clipgrad
-model_resume_path:
+model_resume_path: ./lightning_checkpoints/2025-11-12 16-46-36.879329-rosy-meadow-98-u60w90wl/best-val-nn-epoch=44-train_loss=0.27-val_fid=0.00.ckpt
 sampling: ddim
 val_fid_calculation_period: 15
 lr: 2e-4
@@ -27,7 +27,7 @@ batch_size: 8
 accumulate_grad_batches: 2
 val:
   num_points: 2048
-  num_samples: 40
+  num_samples: 5
 mlp_config:
   params:
     model_type: mlp_3d

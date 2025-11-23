@@ -102,7 +102,9 @@ class MLP3D(nn.Module):
         elif self.output_type == "logits":
             x = x
         else:
-            raise f"This self.output_type ({self.output_type}) not implemented"
+            raise ValueError(
+                f"This self.output_type ({self.output_type}) not implemented"
+            )
         x = dist.Bernoulli(logits=x).logits
 
         return {"model_in": coords_org, "model_out": x}

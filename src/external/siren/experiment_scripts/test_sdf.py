@@ -11,10 +11,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    )
+)
 
 import torch
 
-from siren import sdf_meshing, utils
+from external.siren import sdf_meshing, utils
 
 
 class SDFDecoder(torch.nn.Module):

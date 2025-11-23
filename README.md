@@ -14,7 +14,7 @@ I'll release rest of the weights/checkpoints after post-refactor tests are compl
 
 ## Method Overview
 
-![Overview image](/static/overview.svg)
+![Overview image](/docs/overview.svg)
 
 ## Dependencies
 

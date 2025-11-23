@@ -3,9 +3,9 @@ calculate_metric_on_test: True
 dedup: False
 test_sample_mult: 1.1
 filter_bad: True
-filter_bad_path: ./data/car_problematic_shapes.txt
+filter_bad_path: ./data/baseline/car_problematic_shapes.txt
 disable_wandb: False
-dataset_dir: ./data
+dataset_dir: ./data/baseline
 dataset: 02958343
 tensorboard_log_dir: .
 augment: False

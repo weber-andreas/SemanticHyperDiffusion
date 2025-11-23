@@ -6,7 +6,7 @@ test_sample_mult: 1.1
 filter_bad: False
 filter_bad_path: ""
 disable_wandb: False
-dataset_dir: ./data/DeformingThings4D
+dataset_dir: ./data/baseline/DeformingThings4D
 dataset: animals
 tensorboard_log_dir: .
 augment: False
