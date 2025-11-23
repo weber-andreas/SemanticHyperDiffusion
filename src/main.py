@@ -1,11 +1,4 @@
 import os
-
-from dataset import VoxelDataset, WeightDataset
-from hd_utils import Config, get_mlp
-from hyperdiffusion import HyperDiffusion
-
-# Using it to make pyrender work on clusters
-import sys
 from datetime import datetime
 from os.path import join
 
@@ -14,13 +7,16 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from omegaconf import DictConfig
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
 import wandb
-from transformer import Transformer
-
+from external.ldm.ldm.modules.diffusionmodules import openaimodel
+from src.dataset import VoxelDataset, WeightDataset
+from src.hd_utils import Config, get_mlp
+from src.hyperdiffusion import HyperDiffusion
+from src.transformer import Transformer
 
 DEVICE = torch.device(
     "cuda:0"
@@ -43,7 +39,7 @@ else:
     config_name="train_plane",
 )
 def main(cfg: DictConfig):
-    Config.config = config = cfg
+    Config.config = cfg
     method = Config.get("method")
     mlp_kwargs = None
 
@@ -53,11 +49,11 @@ def main(cfg: DictConfig):
 
     wandb.init(
         project="hyperdiffusion",
-        dir=config["tensorboard_log_dir"],
+        dir=Config.config["tensorboard_log_dir"],
         settings=wandb.Settings(_disable_stats=False, _disable_meta=False),
         tags=[Config.get("mode")],
         mode="disabled" if Config.get("disable_wandb") else "online",
-        config=dict(config),
+        config=dict(Config.config),
     )
 
     wandb_logger = WandbLogger()
@@ -84,9 +80,7 @@ def main(cfg: DictConfig):
         ).to(device=DEVICE)
     # Initialize UNet for Voxel baseline
     else:
-        model = external.ldm.ldm.modules.diffusionmodules.openaimodel.UNetModel(
-            **Config.config["unet_config"]["params"]
-        ).float()
+        model = openaimodel.UNetModel(**Config.config["unet_config"]["params"]).float()
 
     dataset_path = os.path.join(Config.config["dataset_dir"], Config.config["dataset"])
     train_object_names = np.genfromtxt(
@@ -94,9 +88,9 @@ def main(cfg: DictConfig):
     )
     if not cfg.mlp_config.params.move:
         train_object_names = set([str.split(".")[0] for str in train_object_names])
+
     # Check if dataset folder already has train,test,val split; create otherwise.
     if method == "hyper_3d":
-        mlps_folder_all = mlps_folder_train
         all_object_names = np.array(
             [obj for obj in os.listdir(dataset_path) if ".lst" not in obj]
         )
