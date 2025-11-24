@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch
 
 
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(ROOT_DIR)
 from src.embedder import Embedder
 
