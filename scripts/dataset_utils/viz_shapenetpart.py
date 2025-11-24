@@ -266,7 +266,7 @@ def visualize_category_matrix(
     plt.show()
 
 
-def main(args: dict[str, Any]):
+def main(args: argparse.Namespace) -> None:
     base_path = pathlib.Path("./data/shapenetpart/PartAnnotation")
     metadata_path = base_path / "metadata.json"
     metadata = load_meta_data(metadata_path)

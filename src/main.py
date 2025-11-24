@@ -1,6 +1,8 @@
 import os
 import sys
 
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+sys.path.append(ROOT_DIR)
 sys.path.append(os.path.abspath("external"))
 
 from datetime import datetime
@@ -31,6 +33,7 @@ DEVICE = torch.device(
 # Setting PYOPENGL_PLATFORM based on device
 if DEVICE.type == "cuda":
     os.environ["PYOPENGL_PLATFORM"] = "egl"
+    accelerator = "gpu"
 elif DEVICE.type == "mps":
     accelerator = "cpu"
 else:

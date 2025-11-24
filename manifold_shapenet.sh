@@ -25,8 +25,8 @@ EOF
 
 # Set default values for our variables
 MANIFOLD_EXECUTABLE_DEFAULT="./ManifoldPlus/build/manifold"
-INPUT_DIR_DEFAULT="./data/02691156/02691156"
-OUTPUT_DIR_DEFAULT="./data/02691156/planes"
+INPUT_DIR_DEFAULT="./data/shapenet/03001627"
+OUTPUT_DIR_DEFAULT="./data/baseline/chair"
 DEPTH_DEFAULT=8
 
 # --- 2. Parse Command-Line Arguments ---

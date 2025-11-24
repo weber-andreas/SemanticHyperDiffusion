@@ -32,7 +32,7 @@ multi_process:
   n_of_parts: 4
   first_weights_name:
   ignore_first: False
-n_points: 100000
+n_points: 2048
 is_meta: True
 strategy: first_weights
 clip_grad: False
