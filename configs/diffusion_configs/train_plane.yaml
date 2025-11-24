@@ -7,7 +7,7 @@ filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
 disable_wandb: False
 dataset_dir: ./data/baseline
 dataset: 02691156
-split_suffix: _small 
+split_suffix: 
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0
@@ -20,12 +20,12 @@ scheduler_step: 200
 best_model_save_path:
 mode: train
 mlps_folder_train: ./mlp_weights/3d_128_plane_multires_4_manifoldplus_slower_no_clipgrad
-model_resume_path: 
+model_resume_path: ./lightning_checkpoints/2025-11-24 10-18-26.816549-dashing-planet-129-iwkz38wr/last-epoch=59-train_loss=0.24-val_fid=0.00.ckpt
 sampling: ddim
 val_fid_calculation_period: 15
 lr: 2e-4
 batch_size: 8
-accumulate_grad_batches: 2
+accumulate_grad_batches: 4
 val:
   num_points: 2048
   num_samples: 5
@@ -50,8 +50,8 @@ diff_config:
 transformer_config:
   params:
     n_embd: 1024
-    n_layer: 12
-    n_head: 16
+    n_layer: 6
+    n_head: 32
     split_policy: layer_by_layer
     use_global_residual: False
     condition: "no"

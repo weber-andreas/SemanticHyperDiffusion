@@ -167,10 +167,15 @@ def knn(Mxx, Mxy, Myy, k, sqrt=False):
 
 def lgan_mmd_cov(all_dist):
     N_sample, N_ref = all_dist.size(0), all_dist.size(1)
+    # For each generated sample, find the distance to the closest reference shape
     min_val_fromsmp, min_idx = torch.min(all_dist, dim=1)
+    # For each reference shape, find the distance to the closest generated sample
     min_val, _ = torch.min(all_dist, dim=0)
+
+    # MMD: Average of the minimum distances
     mmd = min_val.mean()
     mmd_smp = min_val_fromsmp.mean()
+
     cov = float(min_idx.unique().view(-1).size(0)) / float(N_ref)
     cov = torch.tensor(cov).to(all_dist)
     return {
@@ -272,6 +277,8 @@ def compute_all_metrics(sample_pcs, ref_pcs, batch_size, logger):
 
     print("Pairwise EMD CD")
     M_rs_cd, M_rs_emd = _pairwise_EMD_CD_(ref_pcs, sample_pcs, batch_size)
+    M_rr_cd, M_rr_emd = _pairwise_EMD_CD_(ref_pcs, ref_pcs, batch_size)
+    M_ss_cd, M_ss_emd = _pairwise_EMD_CD_(sample_pcs, sample_pcs, batch_size)
 
     ## EMD
     res_emd = lgan_mmd_cov(M_rs_emd.t())
@@ -321,9 +328,6 @@ def compute_all_metrics(sample_pcs, ref_pcs, batch_size, logger):
     results.update({"%s-CD" % k: v for k, v in res_cd.items()})
     for k, v in results.items():
         print("[%s] %.8f" % (k, v.item()))
-
-    M_rr_cd, M_rr_emd = _pairwise_EMD_CD_(ref_pcs, ref_pcs, batch_size)
-    M_ss_cd, M_ss_emd = _pairwise_EMD_CD_(sample_pcs, sample_pcs, batch_size)
 
     # 1-NN results
     ## CD

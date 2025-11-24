@@ -11,6 +11,7 @@ import torch
 from omegaconf import DictConfig
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.plugins import DDPPlugin
 from torch.utils.data import DataLoader
 
 import wandb
@@ -267,7 +268,7 @@ def main(cfg: DictConfig):
         accelerator=accelerator,
         devices=1,
         max_epochs=Config.get("epochs"),
-        strategy="ddp",
+        strategy=DDPPlugin(find_unused_parameters=False),
         logger=wandb_logger,
         default_root_dir=checkpoint_path,
         callbacks=[

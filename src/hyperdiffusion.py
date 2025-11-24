@@ -210,7 +210,7 @@ class HyperDiffusion(pl.LightningModule):
 
         # Handle 3D/4D sample generation
         if self.method == "hyper_3d":
-            # every 100 epochs generate samples
+            # every X epochs generate samples
             if self.current_epoch % 20 == 0:
                 x_0s = (
                     self.diff.ddim_sample_loop(self.model, (4, *self.image_size[1:]))
@@ -251,13 +251,13 @@ class HyperDiffusion(pl.LightningModule):
                     meshes, sdfs = self.generate_meshes(x_0s, None, res=512)
                     for mesh in meshes:
                         mesh.vertices *= 2
-                    print(
-                        "sdfs.stats",
-                        sdfs.min().item(),
-                        sdfs.max().item(),
-                        sdfs.mean().item(),
-                        sdfs.std().item(),
-                    )
+                    # print(
+                    #     "sdfs.stats",
+                    #     sdfs.min().item(),
+                    #     sdfs.max().item(),
+                    #     sdfs.mean().item(),
+                    #     sdfs.std().item(),
+                    # )
                     out_imgs = render_meshes(meshes)
                     self.logger.log_image(
                         "generated_renders", out_imgs, step=self.current_epoch

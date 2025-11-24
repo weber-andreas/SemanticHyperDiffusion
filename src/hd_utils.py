@@ -1,4 +1,3 @@
-import logging
 from math import ceil
 
 import numpy as np
@@ -22,7 +21,7 @@ def calculate_fid_3d(
     fid = FrechetInceptionDistance(reset_real_features=True)
     batch_size = 10
     point_net = pointnet2_cls_ssg.get_model(40, normal_channel=False)
-    checkpoint = torch.load(path)
+    checkpoint = torch.load(path, map_location=sample_pcs.device, weights_only=False)
     point_net.load_state_dict(checkpoint["model_state_dict"])
     point_net.eval().to(sample_pcs.device)
     count = len(sample_pcs)
@@ -91,6 +90,7 @@ def generate_mlp_from_weights(weights, mlp_kwargs):
 
 
 def render_meshes(meshes):
+    print("Rendering %d meshes" % len(meshes))
     out_imgs = []
     for mesh in meshes:
         img = render_mesh(mesh)
@@ -99,7 +99,6 @@ def render_meshes(meshes):
 
 
 def render_mesh(obj):
-    logging.info("Rendering mesh")
     # Convert to pyrender mesh
     mesh = pyrender.Mesh.from_trimesh(
         obj,

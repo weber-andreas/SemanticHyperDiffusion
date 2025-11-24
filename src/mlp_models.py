@@ -107,3 +107,9 @@ class MLP3D(nn.Module):
         x = dist.Bernoulli(logits=x).logits
 
         return {"model_in": coords_org, "model_out": x}
+
+
+# distribution over class labels over per object and over all object
+
+# CompositeMLP3D that contains multiple MLP branches per part
+# Input: 3D coordinate + semantic label
