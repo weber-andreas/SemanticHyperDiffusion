@@ -108,6 +108,12 @@ find "$INPUT_DIR" -type f -name "model_normalized.obj" | while read -r input_fil
   # Construct the full path for the new output file.
   output_file="$OUTPUT_DIR/$unique_id.obj"
 
+  # If the output file already exists, skip to the next one.
+  if [ -f "$output_file" ]; then
+    echo "Skipping (already exists): $output_file"
+    continue
+  fi
+
   echo "Processing '$input_file'  ==>  '$output_file'"
   
   # Run ManifoldPlus on the file with the specified depth.
