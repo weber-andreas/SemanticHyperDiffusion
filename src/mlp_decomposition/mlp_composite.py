@@ -213,7 +213,13 @@ class CompositePartNet(nn.Module):
         for part_name, data in registry["parts"].items():
             self.parts[part_name] = PartNet(data["config"])
 
-    def forward(self, x, active_parts=None):
+    def forward(self, model_input, active_parts=None):
+        # Extract coords from input dict if it's a dict, otherwise assume it's a tensor
+        if isinstance(model_input, dict):
+            x = model_input["coords"]
+        else:
+            x = model_input
+
         part_sdfs = []
         for name, network in self.parts.items():
             if active_parts is not None and name not in active_parts:
@@ -221,11 +227,13 @@ class CompositePartNet(nn.Module):
             part_sdfs.append(network(x))
 
         if not part_sdfs:
-            return torch.ones(x.shape[0], 1).to(x.device)
+            # Should not happen if active_parts is None or valid
+            return {"model_in": x, "model_out": torch.ones(x.shape[0], 1).to(x.device)}
 
         all_sdfs = torch.cat(part_sdfs, dim=1)
         global_sdf, _ = torch.min(all_sdfs, dim=1, keepdim=True)
-        return global_sdf
+
+        return {"model_in": x, "model_out": global_sdf}
 
     def flatten(self):
         # Corrected Key: Matches what generate_registry saves
@@ -250,6 +258,12 @@ class CompositePartNet(nn.Module):
             flat_vector[start_idx : start_idx + func_len] = part_flat
 
         return flat_vector
+
+
+def print_model(model: nn.Module):
+    nparameters = sum(p.numel() for p in model.parameters())
+    print(model)
+    print("Total number of parameters: %d" % nparameters)
 
 
 def example_mlp_decomposition():

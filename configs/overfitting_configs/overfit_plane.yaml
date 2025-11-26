@@ -3,8 +3,8 @@ output_type: "occ" # or sdf or occ
 in_out: True
 augment_on_the_fly: False
 mesh_jitter: False
-# dataset_folder: "data/baseline/02691156_2048_pc/"
-dataset_folder: "data/shapenetpart/PartAnnotation/02691156/points/"
+dataset_folder: "data/baseline/02691156_2048_pc/"
+# dataset_folder: "data/shapenetpart/PartAnnotation/02691156/points/"
 label_folder: "data/shapenetpart/PartAnnotation/02691156/expert_verified/points_label/"
 wandb_dir: .
 batch_size: 2048

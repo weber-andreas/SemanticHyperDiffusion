@@ -22,6 +22,12 @@ from external.siren import loss_functions, sdf_meshing, training, utils
 from external.siren.experiment_scripts.test_sdf import SDFDecoder
 from src.mlp_models import MLP3D
 from src.dataset import SemanticPointCloud
+from src.mlp_decomposition.mlp_composite import (
+    print_model,
+    CompositePartNet,
+    MLPBudgetAllocator,
+)
+
 
 DEVICE = torch.device(
     "cuda:0"
@@ -30,13 +36,14 @@ DEVICE = torch.device(
 )
 
 
-def get_model(cfg):
-    if cfg.model_type == "mlp_3d":
-        model = MLP3D(**cfg.mlp_config)
-    nparameters = sum(p.numel() for p in model.parameters())
-    print(model)
-    print("Total number of parameters: %d" % nparameters)
+def get_model(cfg: DictConfig):
+    distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
+    target_params = 4 + 128 * 3 + 1
 
+    allocator = MLPBudgetAllocator(target_params, distribution)
+    registry = allocator.generate_registry()
+    model = CompositePartNet(registry)
+    print_model(model)
     return model
 
 
@@ -68,33 +75,16 @@ def main(cfg: DictConfig):
     mesh_jitter = cfg.mesh_jitter
     multip_cfg = cfg.multi_process
     files = [
-        # TODO: replace name ending in train, test, val split
-        file.replace(".pts", ".obj")
+        file
         for file in os.listdir(cfg.dataset_folder)
         if file not in ["train_split.lst", "test_split.lst", "val_split.lst"]
     ]
 
-    if multip_cfg.enabled:
-        if multip_cfg.ignore_first:
-            files = files[1:]  # Ignoring the first one
-        count = len(files)
-        per_proc_count = count // multip_cfg.n_of_parts
-        start_index = multip_cfg.part_id * per_proc_count
-        end_index = min(count, start_index + per_proc_count)
-        files = files[start_index:end_index]
-        if cfg.strategy == "first_weights":
-            first_state_dict = torch.load(
-                os.path.join(logging_root_path, multip_cfg.first_weights_name)
-            )
-        print(
-            f"Proc {multip_cfg.part_id} is responsible between {start_index} -> {end_index}"
-        )
     lengths = []
     names = []
     train_object_names = np.genfromtxt(
         os.path.join(cfg.dataset_folder, "train_split.lst"), dtype="str"
     )
-    train_object_names = set(train_object_names)
 
     for i, file in enumerate(files):
         # We used to have mesh jittering for augmentation but not using it anymore
@@ -103,15 +93,19 @@ def main(cfg: DictConfig):
             # if file.endswith(".obj"):
             #     file = file[:-3] + "off"
 
-            # remove .npy
             tmp_file = file[:-4] if file.endswith(".npy") else file
+            file_id = tmp_file.removesuffix(".obj")
+            pointcloud_path = os.path.join(cfg.dataset_folder, file_id + ".obj.npy")
+            label_path = os.path.join(cfg.label_folder, file_id + ".seg")
+
+            # remove .npy
             if not (tmp_file in train_object_names):
                 print(f"File {tmp_file} not in train_split")
                 continue
 
-            file_id = tmp_file.removesuffix(".obj")
-            pointcloud_path = os.path.join(cfg.dataset_folder, file_id + ".pts")
-            label_path = os.path.join(cfg.label_folder, file_id + ".seg")
+            if not os.path.exists(label_path):
+                print(f"Label {label_path} not found")
+                continue
 
             sdf_dataset = SemanticPointCloud(
                 on_surface_points=cfg.batch_size,
@@ -145,6 +139,7 @@ def main(cfg: DictConfig):
             loss_fn = partial(loss_fn, cfg=cfg)
             summary_fn = utils.wandb_sdf_summary
 
+            filename = f"{file_id}_jitter_{j}"
             filename = f"{cfg.output_type}_{filename}"
             checkpoint_path = os.path.join(
                 logging_root_path, f"{filename}_model_final.pth"

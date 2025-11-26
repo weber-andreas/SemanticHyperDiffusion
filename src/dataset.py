@@ -275,6 +275,7 @@ class SemanticPointCloud(Dataset):
         self.on_surface_points = on_surface_points
 
         self.coords = None
+        self.occupancies = None
         self.labels = None
 
         if is_mesh:
@@ -364,12 +365,17 @@ class SemanticPointCloud(Dataset):
         self.labels = np.genfromtxt(path)
 
     def _load_raw_pointcloud(self, path: str):
-        point_cloud = np.genfromtxt(path)
+        if path.endswith(".npy"):
+            point_cloud = np.load(path)
+        else:
+            point_cloud = np.genfromtxt(path)
         self.coords = point_cloud[:, :3]
+        self.occupancies = point_cloud[:, 3]
 
     def _apply_half_shape_filter(self):
         included_points = self.coords[:, 0] < 0
         self.coords = self.coords[included_points]
+        self.occupancies = self.occupancies[included_points]
         self.labels = self.labels[included_points]
 
     def _get_pc_folder_name(self, path: str) -> str:
@@ -385,7 +391,8 @@ class SemanticPointCloud(Dataset):
     def __len__(self):
         return self.coords.shape[0] // self.on_surface_points
 
-    def __getitem__(self):
+    def __getitem__(self, idx):
+        """Randomly access a batch of points from the point cloud."""
         total_length = self.coords.shape[0]
         sample_size = self.on_surface_points
 
@@ -393,13 +400,15 @@ class SemanticPointCloud(Dataset):
 
         coords = self.coords[random_indices]
         labels = self.labels[random_indices]
+        occs = self.occupancies[random_indices]
 
         output = {
             "coords": torch.from_numpy(coords).float(),
             "semantic_label": torch.from_numpy(labels).long(),
         }
+        target = {"sdf": torch.from_numpy(occs).float()}
 
-        return output
+        return output, target
 
 
 if __name__ == "__main__":
