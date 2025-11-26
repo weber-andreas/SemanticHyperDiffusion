@@ -1,13 +1,10 @@
 """Reproduces Sec. 4.2 in main paper and Sec. 4 in Supplement."""
 
-import copy
 import os
 import hydra
 import numpy as np
 import torch
-import trimesh
 from omegaconf import DictConfig, open_dict
-from scipy.spatial.transform import Rotation
 from torch.utils.data import DataLoader
 from functools import partial
 import wandb
@@ -21,10 +18,10 @@ sys.path.append("external/")
 sys.path.append("external/siren/")
 
 
-from external.siren import dataio, loss_functions, sdf_meshing, training, utils
+from external.siren import loss_functions, sdf_meshing, training, utils
 from external.siren.experiment_scripts.test_sdf import SDFDecoder
-from src.hd_utils import render_mesh
 from src.mlp_models import MLP3D
+from src.dataset import SemanticPointCloud
 
 DEVICE = torch.device(
     "cuda:0"
@@ -41,6 +38,11 @@ def get_model(cfg):
     print("Total number of parameters: %d" % nparameters)
 
     return model
+
+
+"""
+python src/mlp_decomposition/overfit_mlp.py 
+"""
 
 
 @hydra.main(
@@ -66,7 +68,8 @@ def main(cfg: DictConfig):
     mesh_jitter = cfg.mesh_jitter
     multip_cfg = cfg.multi_process
     files = [
-        file
+        # TODO: replace name ending in train, test, val split
+        file.replace(".pts", ".obj")
         for file in os.listdir(cfg.dataset_folder)
         if file not in ["train_split.lst", "test_split.lst", "val_split.lst"]
     ]
@@ -101,21 +104,21 @@ def main(cfg: DictConfig):
             #     file = file[:-3] + "off"
 
             # remove .npy
-            file = file[:-4]
-            if not (file in train_object_names):
-                print(f"File {file} not in train_split")
+            tmp_file = file[:-4] if file.endswith(".npy") else file
+            if not (tmp_file in train_object_names):
+                print(f"File {tmp_file} not in train_split")
                 continue
 
-            filename = file.split(".")[0]
-            filename = f"{filename}_jitter_{j}"
+            file_id = tmp_file.removesuffix(".obj")
+            pointcloud_path = os.path.join(cfg.dataset_folder, file_id + ".pts")
+            label_path = os.path.join(cfg.label_folder, file_id + ".seg")
 
-            sdf_dataset = dataio.PointCloud(
-                os.path.join(cfg.dataset_folder, file),
+            sdf_dataset = SemanticPointCloud(
                 on_surface_points=cfg.batch_size,
-                is_mesh=True,
+                pointcloud_path=pointcloud_path,
+                label_path=label_path,
+                is_mesh=False,
                 output_type=cfg.output_type,
-                out_act=cfg.out_act,
-                n_points=cfg.n_points,
                 cfg=cfg,
             )
             dataloader = DataLoader(
@@ -233,51 +236,20 @@ def main(cfg: DictConfig):
                     os.path.join(cfg.logging_root, f"{cfg.exp_name}_ply"),
                     exist_ok=True,
                 )
-                if cfg.mlp_config.move:
-                    imgs = []
-                    for time_val in range(sdf_dataset.total_time):
-                        vertices, faces, _ = sdf_meshing.create_mesh(
-                            sdf_decoder,
-                            os.path.join(
-                                cfg.logging_root,
-                                f"{cfg.exp_name}_ply",
-                                filename + "_" + str(time_val),
-                            ),
-                            N=256,
-                            level=(
-                                0.5
-                                if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
-                                else 0
-                            ),
-                            time_val=time_val,
-                        )
-                        rot_matrix = Rotation.from_euler(
-                            "zyx", [45, 180, 90], degrees=True
-                        )
-                        tmp = copy.deepcopy(faces[:, 1])
-                        faces[:, 1] = faces[:, 2]
-                        faces[:, 2] = tmp
-                        obj = trimesh.Trimesh(rot_matrix.apply(vertices), faces)
-                        img, _ = render_mesh(obj)
-                        imgs.append(img)
-                    imgs = np.array(imgs)
-                    imgs = np.transpose(imgs, axes=(0, 3, 1, 2))
-                    wandb.log({"animation": wandb.Video(imgs, fps=16)})
-                else:
-                    sdf_meshing.create_mesh(
-                        sdf_decoder,
-                        os.path.join(
-                            cfg.logging_root,
-                            f"{cfg.exp_name}_ply",
-                            filename,
-                        ),
-                        N=256,
-                        level=(
-                            0
-                            if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
-                            else 0
-                        ),
-                    )
+                sdf_meshing.create_mesh(
+                    sdf_decoder,
+                    os.path.join(
+                        cfg.logging_root,
+                        f"{cfg.exp_name}_ply",
+                        filename,
+                    ),
+                    N=256,
+                    level=(
+                        0
+                        if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
+                        else 0
+                    ),
+                )
 
 
 if __name__ == "__main__":

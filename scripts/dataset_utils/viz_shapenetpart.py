@@ -1,105 +1,24 @@
 """Visualization of ShapeNetPart dataset"""
 
-from typing import Any
-import json
-import logging
+import sys
 import os
+import logging
 import pathlib
-from glob import glob
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
-import natsort
 import argparse
 
-
-def get_file_id(point_cloud_file: str) -> str:
-    """Extract file ID from point cloud file name."""
-    file_id = point_cloud_file.split("/")[-1].split(".")[0]
-    logging.info("Extracted file id: %s", file_id)
-    return file_id
-
-
-def load_point_cloud(
-    base_path: pathlib.Path,
-    category: str,
-    meta_data: dict,
-    specific_index: Optional[int] = None,
-    file_id: Optional[str] = None,
-) -> tuple[np.ndarray, list[str]]:
-    """Load point clouds and their labels from the dataset."""
-
-    if (specific_index is None and file_id is None) or (
-        specific_index is not None and file_id is not None
-    ):
-        raise ValueError("Must provide exactly one of: specific_index or file_id")
-
-    points_path = base_path / meta_data[category]["directory"] / "points"
-    labels_path = base_path / meta_data[category]["directory"] / "points_label"
-    label_names = meta_data[category]["lables"]
-
-    point_cloud = None
-    point_cloud_labels = {}
-
-    points_files = glob(os.path.join(points_path, "*.pts"))
-    points_files = natsort.natsorted(points_files)
-
-    if specific_index is None:
-        # Find index of the file in point_files matching the given file_id
-        specific_index = next(
-            (i for i, file in enumerate(points_files) if get_file_id(file) == file_id)
-        )
-
-    point_cloud = np.loadtxt(points_files[specific_index]).astype("float32")
-    logging.info("Loaded file: %s", points_files[specific_index])
-
-    fid = get_file_id(points_files[specific_index])
-    for label_name in label_names:
-        point_label_file = os.path.join(labels_path, label_name, fid + ".seg")
-        if not os.path.exists(point_label_file):
-            logging.warning(
-                "Label file %s does not exist. Skipping label %s.",
-                point_label_file,
-                label_name,
-            )
-            continue
-
-        point_labels = np.loadtxt(point_label_file).astype("int32")
-        point_cloud_labels[label_name] = point_labels
-        logging.info("Loaded file: %s", point_label_file)
-
-    label_counts = ", ".join(
-        f"{part}: {point_labels.size}"
-        for part, point_labels in point_cloud_labels.items()
-    )
-    logging.info("Loaded point cloud with %d points.", len(point_cloud))
-    logging.info("Loaded point cloud with labels: %s", label_counts)
-
-    assert (
-        len(set(el.size for el in point_cloud_labels.values())) == 1
-    ), "Mismatch in number of points between point cloud and labels."
-    num_point_labels_per_category = len(next(iter(point_cloud_labels.values())))
-
-    point_cloud_label_map = ["none"] * num_point_labels_per_category
-    for label in label_names:
-        # make sure the label exists in the loaded labels
-        if label not in point_cloud_labels:
-            continue
-        for i, data in enumerate(point_cloud_labels[label]):
-            point_cloud_label_map[i] = label if data == 1 else point_cloud_label_map[i]
-
-    return point_cloud, point_cloud_label_map
-
-
-def load_meta_data(path: pathlib.Path) -> dict:
-    """Load metadata for ShapeNetPart dataset."""
-    with open(path, encoding="utf-8") as json_file:
-        data = json.load(json_file)
-        logging.info("Metadata loaded successfully.")
-    return data
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+sys.path.append(os.path.abspath(ROOT_DIR))
+from src.dataset_utils import (
+    load_semantic_point_cloud,
+    load_meta_data,
+    numeric_labels_to_str,
+)
 
 
 def visualize_pointcloud_3d(point_cloud: np.ndarray, labels: list[str]) -> None:
@@ -156,17 +75,19 @@ def visualize_single_pointcloud(
     logging.info("Object categories found: %s", object_categories)
     assert category in object_categories, f"Category {category} not found in metadata."
 
-    point_cloud, point_cloud_labels = load_point_cloud(
+    point_cloud, point_cloud_labels, label_names = load_semantic_point_cloud(
         **attr_filter,  # either file_id or specific_index
         base_path=base_path,
         category=category,
         meta_data=metadata,
+        expert_verified=args.expert_verified,
     )
+    labels = numeric_labels_to_str(point_cloud_labels, label_names)
 
     if visualize_2d:
-        visualize_pointcloud_2d(point_cloud, point_cloud_labels)
+        visualize_pointcloud_2d(point_cloud, labels)
     else:
-        visualize_pointcloud_3d(point_cloud, point_cloud_labels)
+        visualize_pointcloud_3d(point_cloud, labels)
 
 
 def visualize_pointcloud_2d(point_cloud: np.ndarray, labels: list[str]) -> None:
@@ -230,12 +151,16 @@ def visualize_category_matrix(
         while object_counts < num_objects:
             ax = axes[i, j]
             try:
-                point_cloud, labels = load_point_cloud(
-                    base_path=base_path,
-                    meta_data=meta_data,
-                    category=category,
-                    specific_index=j,
+                point_cloud, point_cloud_labels, label_names = (
+                    load_semantic_point_cloud(
+                        base_path=base_path,
+                        meta_data=meta_data,
+                        category=category,
+                        specific_index=j,
+                        expert_verified=args.expert_verified,
+                    )
                 )
+                labels = numeric_labels_to_str(labels, label_names)
 
                 unique_labels = sorted(list(set(labels)))
                 label_to_id = {label: i for i, label in enumerate(unique_labels)}
@@ -336,6 +261,12 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Visualize point cloud in 2D.",
+    )
+    parser.add_argument(
+        "--expert_verified",
+        action="store_true",
+        default=False,
+        help="Use expert verified labels.",
     )
     args = parser.parse_args()
     args.categories = args.categories.split(" ")
