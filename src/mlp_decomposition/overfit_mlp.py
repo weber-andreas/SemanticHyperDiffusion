@@ -181,7 +181,7 @@ def update_weight_statistics(x_0s: List[torch.Tensor], model: torch.nn.Module) -
         tmp = torch.stack(x_0s)
         var = torch.var(tmp, dim=0)
         print(
-            f"Stats - Shape: {var.shape} | Mean: {var.mean().item():.5f} | "
+            f"Shape: {var.shape} | Mean: {var.mean().item():.5f} | "
             f"Std: {var.std().item():.5f} | Min: {var.min().item():.5f} | "
             f"Max: {var.max().item():.5f}"
         )

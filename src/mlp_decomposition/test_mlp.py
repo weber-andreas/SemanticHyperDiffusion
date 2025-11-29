@@ -19,7 +19,6 @@ from src.mlp_decomposition.mlp_composite import get_model
 class SDFDecoder(torch.nn.Module):
     def __init__(self, checkpoint_path, device, output_type="sdf"):
         super().__init__()
-        # Define the model.
         self.model = get_model(output_type=output_type)
 
         if checkpoint_path is not None:

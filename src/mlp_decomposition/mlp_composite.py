@@ -190,7 +190,7 @@ class PartNet(nn.Module):
         layers = []
         if len(hidden_neurons) > 0:
             layers.append(nn.Linear(input_dim, hidden_neurons[0]))
-            layers.append(nn.SiLU())  # Changed to SiLU as originally requested
+            layers.append(nn.SiLU())
             for i in range(len(hidden_neurons) - 1):
                 layers.append(nn.Linear(hidden_neurons[i], hidden_neurons[i + 1]))
                 layers.append(nn.SiLU())
@@ -216,23 +216,26 @@ class CompositePartNet(nn.Module):
             self.parts[part_name] = PartNet(data["config"])
 
     def forward(self, model_input, active_parts=None):
-        # Extract coords from input dict if it's a dict, otherwise assume it's a tensor
+        # During training, model_input is a dict with "coords" and "occ" keys
         if isinstance(model_input, dict):
             x = model_input["coords"]
+            semantic_label = model_input.get("semantic_label")
+        # During inference, model_input is a tensor
         else:
             x = model_input
+            semantic_label = None
 
-        part_sdfs = []
+        part_sdfs = {}
         for name, network in self.parts.items():
             if active_parts is not None and name not in active_parts:
                 continue
-            part_sdfs.append(network(x))
+            part_sdfs[name] = network(x)
 
         if not part_sdfs:
             # Should not happen if active_parts is None or valid
             return {"model_in": x, "model_out": torch.ones(x.shape[0], 1).to(x.device)}
 
-        all_sdfs = torch.cat(part_sdfs, dim=-1)
+        all_sdfs = torch.cat(list(part_sdfs.values()), dim=-1)
 
         if self.output_type == "occ":
             # For occupancy logits, max corresponds to union
@@ -241,7 +244,12 @@ class CompositePartNet(nn.Module):
             # For SDF (negative inside), min corresponds to union
             global_sdf, _ = torch.min(all_sdfs, dim=-1, keepdim=True)
 
-        return {"model_in": x, "model_out": global_sdf}
+        return {
+            "model_in": x,
+            "model_out": global_sdf,
+            "part_outputs": part_sdfs,
+            "semantic_label": semantic_label,
+        }
 
     def flatten(self):
         # Corrected Key: Matches what generate_registry saves
@@ -295,7 +303,8 @@ def example_mlp_decomposition():
     print(f"Match: {target_params == result['total_params']}")
     print("=" * 80)
     print(
-        f"{'PART':<10} | {'ALLOCATED':<10} | {'FUNCTIONAL':<10} | {'PADDING':<8} | {'STRUCTURE'}"
+        f"{'PART':<10} | {'ALLOCATED':<10} | {'FUNCTIONAL':<10} "
+        f"| {'PADDING':<8} | {'STRUCTURE'}"
     )
     print("-" * 80)
 
