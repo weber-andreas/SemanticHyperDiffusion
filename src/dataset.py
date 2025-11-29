@@ -328,13 +328,13 @@ class SemanticPointCloud(Dataset):
         pointcloud_expert[:, 0] = pointcloud_expert[:, 2]
         pointcloud_expert[:, 2] = -x
 
-        print(
-            "Pointcloud Expert:",
-            pointcloud_expert.min(axis=0),
-            pointcloud_expert.max(axis=0),
-            mean,
-            scale_factor,
-        )
+        # print(
+        #     "Pointcloud Expert:",
+        #     pointcloud_expert.min(axis=0),
+        #     pointcloud_expert.max(axis=0),
+        #     mean,
+        #     scale_factor,
+        # )
 
         pointcloud_coords = pointcloud[:, :3]
         mean, scale_factor = self._compute_normalization_params(pointcloud_coords)
@@ -343,15 +343,13 @@ class SemanticPointCloud(Dataset):
         )
         pointcloud[:, :3] = pointcloud_coords
 
-        print(
-            "Pointcloud:",
-            pointcloud_coords.min(axis=0),
-            pointcloud_coords.max(axis=0),
-            mean,
-            scale_factor,
-        )
-
-        visualize_pointcloud_3d(pointcloud_expert, labels)
+        # print(
+        #     "Pointcloud:",
+        #     pointcloud_coords.min(axis=0),
+        #     pointcloud_coords.max(axis=0),
+        #     mean,
+        #     scale_factor,
+        # )
 
         # Most likely there will be a mismatch in the number of points
         # apply nearest neighbor matching, to align pointcloud and labels
@@ -367,7 +365,7 @@ class SemanticPointCloud(Dataset):
         self.occupancies = pointcloud[:, 3]
         self.labels = labels
 
-        print(f"Finished loading point cloud. Total points: {self.coords.shape[0]}.")
+        # print(f"Finished loading point cloud. Total points: {self.coords.shape[0]}.")
 
     def _nearest_neighbor_matching(self, pointcloud, pointcloud_expert, labels):
         nn_matcher = NearestNeighbors(n_neighbors=1, algorithm="kd_tree")

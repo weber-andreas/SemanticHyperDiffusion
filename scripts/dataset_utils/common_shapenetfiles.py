@@ -11,14 +11,16 @@ import logging
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(ROOT_DIR)
 
-from scripts.dataset_utils.viz_shapenetpart import load_meta_data, get_file_id
+from src.dataset_utils import load_meta_data
 import pathlib
 
 
 def get_file_ids_in_dir(directory: pathlib.Path) -> set[str]:
     """Get all file names in a given directory."""
     # can be either .pts or .npy files
-    file_names = {f.name for f in directory.glob("*.*") if f.suffix in {".pts", ".npy"}}
+    file_names = {
+        f.name for f in directory.glob("*.*") if f.suffix in {".pts", ".npy", ".seg"}
+    }
     file_ids = {str.split(name, ".")[0] for name in file_names}
     return file_ids
 
@@ -33,10 +35,12 @@ def get_file_ids_from_txt(file_path: pathlib.Path) -> set[str]:
 def get_common_shapenet_file_ids(
     shapenetpart_file_ids: set[str],
     shapenet_file_ids: set[str],
+    shapenetpart_expert_label_ids: set[str],
     problematic_file_ids: set[str],
 ) -> set[str]:
     """Get the common ShapeNet files between ShapeNet and ShapeNetPart datasets."""
     intersection = shapenetpart_file_ids.intersection(shapenet_file_ids)
+    intersection = intersection.intersection(shapenetpart_expert_label_ids)
     common_file_ids = intersection.difference(problematic_file_ids)
     return common_file_ids
 
@@ -58,9 +62,15 @@ if __name__ == "__main__":
     shapenet_points_path = shapenet_base_path / (
         meta_data[CATEGORY]["directory"] + "_2048_pc"
     )
+    shapenetpart_expert_label_path = (
+        shapenetpart_base_path
+        / meta_data[CATEGORY]["directory"]
+        / "expert_verified/points_label"
+    )
 
     shapenetpart_file_ids = get_file_ids_in_dir(shapenetpart_points_path)
     shapenet_file_ids = get_file_ids_in_dir(shapenet_points_path)
+    shapenetpart_expert_label_ids = get_file_ids_in_dir(shapenetpart_expert_label_path)
     logging.info(f"ShapeNetPart files: {len(shapenetpart_file_ids)}")
     logging.info(f"ShapeNet files: {len(shapenet_file_ids)}")
 
@@ -73,7 +83,10 @@ if __name__ == "__main__":
     logging.info(f"Problematic files: {len(problematic_file_ids)}")
 
     common_file_ids = get_common_shapenet_file_ids(
-        shapenetpart_file_ids, shapenet_file_ids, problematic_file_ids
+        shapenetpart_file_ids,
+        shapenet_file_ids,
+        shapenetpart_expert_label_ids,
+        problematic_file_ids,
     )
     logging.info(f"Common files: {len(common_file_ids)}")
 
