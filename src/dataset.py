@@ -6,12 +6,23 @@ from os.path import join
 import numpy as np
 import torch
 import trimesh
+from omegaconf import DictConfig
+from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import Dataset
 from trimesh.voxel import creation as vox_creation
+
+# Enable import from parent package
+import sys
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
 from external.siren.dataio import anime_read
 from src.augment import random_permute_flat, random_permute_mlp, sorted_permute_mlp
 from src.hd_utils import generate_mlp_from_weights, get_mlp
+from scripts.dataset_utils.viz_shapenetpart import visualize_pointcloud_3d
+from src.dataset_utils import load_meta_data
 
 
 class VoxelDataset(Dataset):
@@ -263,6 +274,7 @@ class SemanticPointCloud(Dataset):
         self,
         on_surface_points: int,  # batch size
         pointcloud_path: str,
+        pointcloud_expert_path: str,
         label_path: str,
         is_mesh: bool = True,
         output_type: str = "occ",
@@ -274,6 +286,11 @@ class SemanticPointCloud(Dataset):
         self.cfg = cfg
         self.on_surface_points = on_surface_points
 
+        pointcloud = None
+        pointcloud_expert = None
+        labels = None
+
+        # Filled during initialization
         self.coords = None
         self.occupancies = None
         self.labels = None
@@ -281,20 +298,99 @@ class SemanticPointCloud(Dataset):
         if is_mesh:
             if cfg.strategy == "save_pc":
                 obj = self._load_mesh(pointcloud_path)
-                self._preprocess_mesh_data(obj)
+                coords, occupancies = self._preprocess_mesh_data(obj)
+                pointcloud = np.hstack((coords, occupancies[:, None]))
                 # save pointcloud as binary file
-                self._save_pointcloud(pointcloud_path)
+                self._save_pointcloud(pointcloud_path, coords, occupancies)
             else:
                 # load pointcloud that was saved as binary file
-                self._load_binary_pointcloud(pointcloud_path)
+                pointcloud = self._load_binary_pointcloud(pointcloud_path)
         else:
-            self._load_raw_pointcloud(pointcloud_path)
-            self._load_raw_pointcloud_labels(label_path)
+            raise NotImplementedError(
+                "Pointclouds are not supported for non-mesh data."
+            )
+
+        # Load point clouds with expert annotations
+        pointcloud_expert = self._load_raw_pointcloud(pointcloud_expert_path)
+        labels = self._load_raw_pointcloud_labels(label_path)
+
+        # Compute normalization parameters from expert pointcloud itself
+        mean, scale_factor = self._compute_normalization_params(pointcloud_expert)
+
+        # Normalize pointcloud_expert to match pointcloud
+        pointcloud_expert = self._normalize_pointcloud(
+            pointcloud_expert, mean, scale_factor
+        )
+
+        # Rotate 90 degrees around Y axis to match generated pointcloud
+        # x_new = z_old, z_new = -x_old
+        x = pointcloud_expert[:, 0].copy()
+        pointcloud_expert[:, 0] = pointcloud_expert[:, 2]
+        pointcloud_expert[:, 2] = -x
+
+        print(
+            "Pointcloud Expert:",
+            pointcloud_expert.min(axis=0),
+            pointcloud_expert.max(axis=0),
+            mean,
+            scale_factor,
+        )
+
+        pointcloud_coords = pointcloud[:, :3]
+        mean, scale_factor = self._compute_normalization_params(pointcloud_coords)
+        pointcloud_coords = self._normalize_pointcloud(
+            pointcloud_coords, mean, scale_factor
+        )
+        pointcloud[:, :3] = pointcloud_coords
+
+        print(
+            "Pointcloud:",
+            pointcloud_coords.min(axis=0),
+            pointcloud_coords.max(axis=0),
+            mean,
+            scale_factor,
+        )
+
+        visualize_pointcloud_3d(pointcloud_expert, labels)
+
+        # Most likely there will be a mismatch in the number of points
+        # apply nearest neighbor matching, to align pointcloud and labels
+        if pointcloud.shape != labels.shape:
+            labels = self._nearest_neighbor_matching(
+                pointcloud, pointcloud_expert, labels
+            )
 
         if cfg and cfg.get("shape_modify") == "half":
             self._apply_half_shape_filter()
 
+        self.coords = pointcloud[:, :3]
+        self.occupancies = pointcloud[:, 3]
+        self.labels = labels
+
         print(f"Finished loading point cloud. Total points: {self.coords.shape[0]}.")
+
+    def _nearest_neighbor_matching(self, pointcloud, pointcloud_expert, labels):
+        nn_matcher = NearestNeighbors(n_neighbors=1, algorithm="kd_tree")
+        nn_matcher.fit(pointcloud_expert)
+
+        pointcloud_coords = pointcloud[:, :3]
+        # find nearest neighbor for each point in pointcloud
+        _, indices = nn_matcher.kneighbors(pointcloud_coords, return_distance=True)
+        closest_expert_indices = indices.flatten()
+        matched_labels = labels[closest_expert_indices]
+        return matched_labels
+
+    def _compute_normalization_params(self, pointcloud):
+        mean = np.mean(pointcloud, axis=0, keepdims=True)
+        pointcloud_centered = pointcloud - mean
+        v_max, v_min = np.amax(pointcloud_centered), np.amin(pointcloud_centered)
+        scale_factor = 0.5 * 0.95 / (max(abs(v_min), abs(v_max)))
+        return mean, scale_factor
+
+    def _normalize_pointcloud(self, pointcloud, mean, scale_factor):
+        pointcloud -= mean
+        pointcloud *= scale_factor
+        return pointcloud
 
     def _load_mesh(self, path: str) -> trimesh.Trimesh:
         """Loads a mesh file and applies normalization."""
@@ -302,10 +398,9 @@ class SemanticPointCloud(Dataset):
 
         # Normalization logic
         vertices = obj.vertices
-        vertices -= np.mean(vertices, axis=0, keepdims=True)
-        v_max, v_min = np.amax(vertices), np.amin(vertices)
-        scale_factor = 0.5 * 0.95 / (max(abs(v_min), abs(v_max)))
-        obj.vertices = vertices * scale_factor
+        mean, scale_factor = self._compute_normalization_params(vertices)
+        vertices = self._normalize_pointcloud(vertices, mean, scale_factor)
+        obj.vertices = vertices
 
         return obj
 
@@ -320,7 +415,8 @@ class SemanticPointCloud(Dataset):
         all_points = np.concatenate([points_surface, points_uniform], axis=0)
 
         # Calculate Labels (Occupancies)
-        self.coords, self.occupancies = self._calculate_occupancies(all_points, obj)
+        coords, occupancies = self._calculate_occupancies(all_points, obj)
+        return coords, occupancies
 
     def _calculate_occupancies(
         self, points: np.ndarray, obj: trimesh.Trimesh
@@ -339,16 +435,11 @@ class SemanticPointCloud(Dataset):
         )
         return points, occupancies
 
-    def _save_pointcloud(self, path: str):
+    def _save_pointcloud(self, path: str, coords: np.ndarray, occupancies: np.ndarray):
         pc_folder = self._get_pc_folder_name(path)
         os.makedirs(pc_folder, exist_ok=True)
 
-        if self.labels is not None:
-            point_cloud_data = np.hstack(
-                (self.coords, self.occupancies[:, None], self.labels[:, None])
-            )
-        else:
-            point_cloud_data = np.hstack((self.coords, self.occupancies[:, None]))
+        point_cloud_data = np.hstack((coords, occupancies[:, None]))
 
         save_path = os.path.join(pc_folder, os.path.basename(path) + ".npy")
         np.save(save_path, point_cloud_data)
@@ -359,23 +450,28 @@ class SemanticPointCloud(Dataset):
         load_path = os.path.join(pc_folder, os.path.basename(path) + ".npy")
         point_cloud = np.load(load_path)
 
-        self.coords = point_cloud[:, :3]
+        mean, scale_factor = self._compute_normalization_params(point_cloud[:, :3])
+        point_cloud[:, :3] = self._normalize_pointcloud(
+            point_cloud[:, :3], mean, scale_factor
+        )
+        return point_cloud
 
     def _load_raw_pointcloud_labels(self, path: str):
-        self.labels = np.genfromtxt(path)
+        return np.genfromtxt(path)
 
     def _load_raw_pointcloud(self, path: str):
         if path.endswith(".npy"):
             point_cloud = np.load(path)
         else:
             point_cloud = np.genfromtxt(path)
-        self.coords = point_cloud[:, :3]
-        self.occupancies = point_cloud[:, 3]
+        return point_cloud
 
     def _apply_half_shape_filter(self):
-        included_points = self.coords[:, 0] < 0
-        self.coords = self.coords[included_points]
-        self.occupancies = self.occupancies[included_points]
+        included_points = self.pointcloud[:, 0] < 0
+        self.pointcloud = self.pointcloud[included_points]
+
+        included_points = self.pointcloud_expert[:, 0] < 0
+        self.pointcloud_expert = self.pointcloud_expert[included_points]
         self.labels = self.labels[included_points]
 
     def _get_pc_folder_name(self, path: str) -> str:
@@ -413,23 +509,48 @@ class SemanticPointCloud(Dataset):
 
 if __name__ == "__main__":
     ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
-    sys.path.append(ROOT_DIR)
+    if ROOT_DIR not in sys.path:
+        sys.path.append(ROOT_DIR)
 
-    file_id = "1a04e3eab45ca15dd86060f189eb133"
-    poitncloud_path = "data/baseline/02691156_2048_pc/"
-    pointcloud_expert_path = "data/shapenetpart/PartAnnotation/02691156/points/"
+    meta_data_path = "data/shapenetpart/PartAnnotation/metadata.json"
+    meta_data = load_meta_data(meta_data_path)
+    CATEGORY = "Airplane"  # Airplane, Chair, Car
+    directory = meta_data[CATEGORY]["directory"]
+    label_names = meta_data[CATEGORY]["lables"]
+    print("Label names:", label_names)
+
+    file_id = "1a32f10b20170883663e90eaf6b4ca52"
+    # precomputed hyperdiffusion pointcloud based on meshes
+    pointcloud_path = f"data/baseline/{directory}/"
+
+    # shapenet part
+    pointcloud_expert_path = f"data/shapenetpart/PartAnnotation/{directory}/points/"
     pointcloud_expert_label_path = (
-        "data/shapenetpart/PartAnnotation/02691156/expert_verified/points_label/"
+        f"data/shapenetpart/PartAnnotation/{directory}/expert_verified/points_label/"
     )
 
     dataset_semantic_pc = SemanticPointCloud(
         on_surface_points=2048,
-        pointcloud_path=pointcloud_expert_path + f"{file_id}.pts",
+        pointcloud_path=pointcloud_path + f"{file_id}.obj",
+        pointcloud_expert_path=pointcloud_expert_path + f"{file_id}.pts",
         label_path=pointcloud_expert_label_path + f"{file_id}.seg",
-        is_mesh=False,
+        is_mesh=True,
         output_type="occ",
-        cfg=None,
+        cfg=DictConfig(
+            {
+                "n_points": 2048,
+                "strategy": "first_weights",
+            }
+        ),
     )
 
-    item = dataset_semantic_pc.__getitem__()
+    item = dataset_semantic_pc.__getitem__(0)[0]
     print(item)
+
+    coords = item["coords"].numpy()
+    labels = item["semantic_label"].numpy()
+
+    # map numeric values to labels
+    labels = np.array([label_names[i - 1] for i in labels])
+
+    visualize_pointcloud_3d(coords, labels)
