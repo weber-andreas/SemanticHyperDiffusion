@@ -24,7 +24,7 @@ class MLPBudgetAllocator:
     def _get_input_size(self, multires):
         d = self.input_dim
         if multires < 1:
-            return d + d
+            return d
         return d + (multires * 2 * d)
 
     def calculate_cost(self, width, depth, multires):
@@ -34,6 +34,7 @@ class MLPBudgetAllocator:
         if depth > 1:
             count += (width * width + width) * (depth - 1)  # Hidden Layers
         count += (width * self.global_out_dim) + self.global_out_dim  # Output Layer
+        # print(f"Cost: w={width}, d={depth}, m={multires}, in={in_dim} -> {count}")
         return count
 
     def find_initial_arch(self, target_budget):
@@ -205,10 +206,11 @@ class PartNet(nn.Module):
 
 
 class CompositePartNet(nn.Module):
-    def __init__(self, registry):
+    def __init__(self, registry, output_type="sdf"):
         super().__init__()
         self.parts = nn.ModuleDict()
         self.registry = registry
+        self.output_type = output_type
 
         for part_name, data in registry["parts"].items():
             self.parts[part_name] = PartNet(data["config"])
@@ -230,8 +232,14 @@ class CompositePartNet(nn.Module):
             # Should not happen if active_parts is None or valid
             return {"model_in": x, "model_out": torch.ones(x.shape[0], 1).to(x.device)}
 
-        all_sdfs = torch.cat(part_sdfs, dim=1)
-        global_sdf, _ = torch.min(all_sdfs, dim=1, keepdim=True)
+        all_sdfs = torch.cat(part_sdfs, dim=-1)
+
+        if self.output_type == "occ":
+            # For occupancy logits, max corresponds to union
+            global_sdf, _ = torch.max(all_sdfs, dim=-1, keepdim=True)
+        else:
+            # For SDF (negative inside), min corresponds to union
+            global_sdf, _ = torch.min(all_sdfs, dim=-1, keepdim=True)
 
         return {"model_in": x, "model_out": global_sdf}
 
@@ -251,13 +259,21 @@ class CompositePartNet(nn.Module):
 
             part_flat = torch.cat(functional_weights)
 
-            # This handles the placement.
-            # If the part has 0 padding, it fits perfectly.
-            # If it has padding (last part), the zeros initialized above remain zeros.
+            # Since we removed padding, this fits perfectly.
             func_len = part_flat.numel()
             flat_vector[start_idx : start_idx + func_len] = part_flat
 
         return flat_vector
+
+
+def get_model(output_type="sdf"):
+    distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
+    target_params = 4 + 128 * 3 + 1
+
+    allocator = MLPBudgetAllocator(target_params, distribution)
+    registry = allocator.generate_registry()
+    model = CompositePartNet(registry, output_type=output_type)
+    return model
 
 
 def print_model(model: nn.Module):
@@ -299,7 +315,12 @@ def example_mlp_decomposition():
 
 
 def example_mlp_allocation():
-    distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
+    distribution = {
+        "body": 0.4512913004557292,
+        "wing": 0.330047607421875,
+        "tail": 0.1304693603515625,
+        "engine": 0.08819173177083334,
+    }
     target_size = 3 * 128
 
     # 1. Run the Allocator
@@ -308,6 +329,12 @@ def example_mlp_allocation():
         parts_priority=distribution,
     )
     registry = allocator.generate_registry()
+    import json
+
+    # print(json.dumps(registry, indent=2, default=str))
+    for p, d in registry["parts"].items():
+        print(f"{p}: {d['config']}")
+        print(f"  Layout: {d['memory_layout']}")
 
     # 2. Instantiate the Decomposed Model
     model = CompositePartNet(registry)

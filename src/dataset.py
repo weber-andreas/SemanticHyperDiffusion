@@ -338,10 +338,9 @@ class SemanticPointCloud(Dataset):
 
         pointcloud_coords = pointcloud[:, :3]
         mean, scale_factor = self._compute_normalization_params(pointcloud_coords)
-        pointcloud_coords = self._normalize_pointcloud(
+        pointcloud[:, :3] = self._normalize_pointcloud(
             pointcloud_coords, mean, scale_factor
         )
-        pointcloud[:, :3] = pointcloud_coords
 
         # print(
         #     "Pointcloud:",
@@ -364,8 +363,6 @@ class SemanticPointCloud(Dataset):
         self.coords = pointcloud[:, :3]
         self.occupancies = pointcloud[:, 3]
         self.labels = labels
-
-        # print(f"Finished loading point cloud. Total points: {self.coords.shape[0]}.")
 
     def _nearest_neighbor_matching(self, pointcloud, pointcloud_expert, labels):
         nn_matcher = NearestNeighbors(n_neighbors=1, algorithm="kd_tree")
@@ -434,7 +431,7 @@ class SemanticPointCloud(Dataset):
         return points, occupancies
 
     def _save_pointcloud(self, path: str, coords: np.ndarray, occupancies: np.ndarray):
-        pc_folder = self._get_pc_folder_name(path)
+        pc_folder = SemanticPointCloud.get_pc_folder_name(self.cfg)
         os.makedirs(pc_folder, exist_ok=True)
 
         point_cloud_data = np.hstack((coords, occupancies[:, None]))
@@ -444,7 +441,7 @@ class SemanticPointCloud(Dataset):
 
     def _load_binary_pointcloud(self, path: str):
         """Loads a binary point cloud file (.npy)."""
-        pc_folder = self._get_pc_folder_name(path)
+        pc_folder = SemanticPointCloud.get_pc_folder_name(self.cfg)
         load_path = os.path.join(pc_folder, os.path.basename(path) + ".npy")
         point_cloud = np.load(load_path)
 
@@ -472,13 +469,14 @@ class SemanticPointCloud(Dataset):
         self.pointcloud_expert = self.pointcloud_expert[included_points]
         self.labels = self.labels[included_points]
 
-    def _get_pc_folder_name(self, path: str) -> str:
-        base_dir = os.path.dirname(path)
-        n_points = str(self.cfg.n_points)
+    @staticmethod
+    def get_pc_folder_name(cfg: DictConfig) -> str:
+        base_dir = os.path.dirname(cfg.dataset_folder)
+        n_points = str(cfg.n_points)
         folder_name = f"{base_dir}_{n_points}_pc"
 
-        if self.cfg.get("in_out"):
-            folder_name += f"_{self.output_type}_in_out_{self.cfg.in_out}"
+        if cfg.get("in_out"):
+            folder_name += f"_{cfg.output_type}_in_out_{cfg.in_out}"
 
         return folder_name
 
@@ -538,6 +536,9 @@ if __name__ == "__main__":
             {
                 "n_points": 2048,
                 "strategy": "first_weights",
+                "in_out": True,
+                "output_type": "occ",
+                "dataset_folder": pointcloud_path,
             }
         ),
     )
