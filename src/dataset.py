@@ -269,6 +269,47 @@ class WeightDataset(Dataset):
         return len(self.mlp_files)
 
 
+class PartSemanticPointCloud(Dataset):
+    def __init__(
+        self,
+        part_name: str,
+        batch_size: int,
+        coords: np.ndarray,
+        labels: np.ndarray,
+        occupancies: np.ndarray,
+    ):
+        super().__init__()
+        self.part_name = part_name
+        self.batch_size = batch_size
+        self.coords = coords
+        self.labels = labels
+        self.occupancies = occupancies
+
+    def __len__(self):
+        if self.coords.shape[0] == 0:
+            return 0
+        return max(1, self.coords.shape[0] // self.batch_size)
+
+    def __getitem__(self, idx):
+        """Randomly access a batch of points from the point cloud."""
+        total_length = self.coords.shape[0]
+        sample_size = self.batch_size
+
+        random_indices = np.random.randint(total_length, size=sample_size)
+
+        coords = self.coords[random_indices]
+        labels = self.labels[random_indices]
+        occs = self.occupancies[random_indices]
+
+        output = {
+            "coords": torch.from_numpy(coords).float(),
+            "semantic_label": torch.from_numpy(labels).long(),
+        }
+        target = {"sdf": torch.from_numpy(occs).float()}
+
+        return output, target
+
+
 class SemanticPointCloud(Dataset):
     def __init__(
         self,
@@ -359,6 +400,20 @@ class SemanticPointCloud(Dataset):
         self.coords = pointcloud[:, :3]
         self.occupancies = pointcloud[:, 3]
         self.labels = labels
+
+    def get_part_specific_pointcloud_datasets(
+        self,
+    ) -> dict[str, PartSemanticPointCloud]:
+        return {
+            part_name: PartSemanticPointCloud(
+                part_name,
+                self.on_surface_points,
+                self.coords[self.labels == idx + 1],
+                self.labels[self.labels == idx + 1],
+                self.occupancies[self.labels == idx + 1],
+            )
+            for idx, part_name in enumerate(self.cfg.label_names)
+        }
 
     def _nearest_neighbor_matching(self, pointcloud, pointcloud_expert, labels):
         nn_matcher = NearestNeighbors(n_neighbors=1, algorithm="kd_tree")
@@ -532,17 +587,27 @@ if __name__ == "__main__":
                 "strategy": "first_weights",
                 "output_type": "occ",
                 "dataset_folder": pointcloud_path,
+                "label_names": label_names,
             }
         ),
     )
 
     item = dataset_semantic_pc.__getitem__(0)[0]
-    print(item)
-
     coords = item["coords"].numpy()
     labels = item["semantic_label"].numpy()
-
+    print(item)
     # map numeric values to labels
     labels = np.array([label_names[i - 1] for i in labels])
-
     visualize_pointcloud_3d(coords, labels)
+
+    # Visualize the pointclouds for each part
+    part_specific_pointcloud_datasets = (
+        dataset_semantic_pc.get_part_specific_pointcloud_datasets()
+    )
+    for part_name, dataset in part_specific_pointcloud_datasets.items():
+        print(part_name)
+        item = dataset.__getitem__(0)[0]
+        coords = item["coords"].numpy()
+        labels = item["semantic_label"].numpy()
+        labels = np.array([label_names[i - 1] for i in labels])
+        visualize_pointcloud_3d(coords, labels)

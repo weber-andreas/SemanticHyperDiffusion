@@ -19,11 +19,42 @@ class MLPComposite(nn.Module):
         for part_name, part_config in registry.items():
             self.parts[part_name] = MLP3D(**part_config)
 
-    def forward(self, model_input: dict[str, torch.Tensor], part_name: str):
-        # all coords have the same semantic label
-        x = model_input["coords"]
-        sdf = self.parts[part_name](x)
-        return sdf
+    def forward(self, model_input, part_name=None):
+        # During training, model_input is a dict with "coords" and "occ" keys
+        if isinstance(model_input, dict):
+            x = model_input["coords"]
+            semantic_label = model_input.get("semantic_label")
+        # During inference, model_input is a tensor
+        else:
+            x = model_input
+            semantic_label = None
+
+        # If part_name is provided (during training), only run that part
+        if part_name is not None:
+            if part_name in self.parts:
+                if isinstance(model_input, dict):
+                    return self.parts[part_name](model_input)
+                else:
+                    return self.parts[part_name]({"coords": model_input})
+            else:
+                raise ValueError(f"Part {part_name} not found in model.")
+
+        part_sdfs = {}
+        min_sdf = None
+        for name, network in self.parts.items():
+            if isinstance(model_input, dict):
+                out = network(model_input)
+            else:
+                out = network({"coords": model_input})
+            part_sdfs[name] = out
+
+            sdf = out["model_out"]
+            if min_sdf is None:
+                min_sdf = sdf
+            else:
+                min_sdf = torch.min(min_sdf, sdf)
+
+        return {"model_out": min_sdf, "parts": part_sdfs}
 
     def flatten(self):
         flat_vector = torch.cat([part.flatten() for part in self.parts.values()])
@@ -34,7 +65,7 @@ class MLPComposite(nn.Module):
             part.unflatten(flat_vector)
 
 
-def get_model():
+def get_model(output_type="occ"):
     distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
     total_hidden_size = 128
 
@@ -52,7 +83,7 @@ def get_model():
             "use_leaky_relu": False,
             "use_bias": True,
             "multires": 10,
-            "output_type": "occ",
+            "output_type": output_type,
         }
 
     model = MLPComposite(registry)

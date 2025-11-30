@@ -15,10 +15,12 @@ sys.path.append(ROOT_DIR)
 sys.path.append("external/")
 sys.path.append("external/siren/")
 
-from external.siren import loss_functions, sdf_meshing, training, utils
+from external.siren import loss_functions, sdf_meshing, utils
 from src.mlp_decomposition.test_mlp import SDFDecoder
 from src.dataset import SemanticPointCloud
 from src.mlp_decomposition.mlp_composite import get_model
+from src.mlp_decomposition import training
+from src.mlp_decomposition import loss
 
 DEVICE = torch.device(
     "cuda:0"
@@ -72,8 +74,8 @@ def get_paths(cfg: DictConfig, file_id: str) -> Dict[str, str]:
     }
 
 
-def create_dataloader(cfg: DictConfig, paths: Dict[str, str]) -> DataLoader:
-    """Creates the Dataset and DataLoader for a specific object."""
+def create_dataloaders(cfg: DictConfig, paths: Dict[str, str]) -> Dict[str, DataLoader]:
+    """Creates a dictionary of DataLoaders, one for each part."""
     sdf_dataset = SemanticPointCloud(
         on_surface_points=cfg.batch_size,
         pointcloud_path=paths["pointcloud"],
@@ -82,19 +84,30 @@ def create_dataloader(cfg: DictConfig, paths: Dict[str, str]) -> DataLoader:
         output_type=cfg.output_type,
         cfg=cfg,
     )
-    return DataLoader(
-        sdf_dataset, shuffle=True, batch_size=1, pin_memory=True, num_workers=0
-    )
+
+    part_datasets = sdf_dataset.get_part_specific_pointcloud_datasets()
+    dataloaders = {}
+    for part_name, dataset in part_datasets.items():
+        if len(dataset) > 0:
+            dataloaders[part_name] = DataLoader(
+                dataset, shuffle=True, batch_size=1, pin_memory=True, num_workers=0
+            )
+        else:
+            print(f"Warning: Dataset for part '{part_name}' is empty. Skipping.")
+    return dataloaders
 
 
 def get_loss_function(cfg: DictConfig) -> Any:
     """Selects the appropriate loss function based on config."""
     if cfg.output_type == "occ":
-        fn = (
-            loss_functions.occ_tanh
-            if cfg.out_act == "tanh"
-            else loss_functions.occ_sigmoid
-        )
+
+        fn = loss.single_part_loss
+        # fn = (
+        #     loss_functions.occ_tanh
+        #     if cfg.out_act == "tanh"
+        #     else loss_functions.occ_sigmoid
+        # )
+
     else:
         fn = loss_functions.sdf
     return partial(fn, cfg=cfg)
@@ -120,19 +133,20 @@ def handle_bad_initialization(
     model.eval()
 
     with torch.no_grad():
-        try:
-            model_input, gt = next(iter(dataloader))
-            model_input = {k: v.to(DEVICE) for k, v in model_input.items()}
-            gt = {k: v.to(DEVICE) for k, v in gt.items()}
+        for part_name, dataloader in dataloader.items():
+            try:
+                model_input, gt = next(iter(dataloader))
+                model_input = {k: v.to(DEVICE) for k, v in model_input.items()}
+                gt = {k: v.to(DEVICE) for k, v in gt.items()}
 
-            model_output = model(model_input)
-            loss = loss_fn(model_output, gt, model)
+                model_output = model(model_input, part_name=part_name)
+                loss = loss_fn(model_output, gt, model)
 
-            if loss.get("occupancy", 0) > 0.5:
-                print("Outlier detected based on loss:", loss)
-                return True
-        except StopIteration:
-            pass
+                if loss.get("occupancy", 0) > 0.5:
+                    print(f"Outlier detected for part {part_name} based on loss:", loss)
+                    return True
+            except StopIteration:
+                pass
 
     return False
 
@@ -203,7 +217,7 @@ def process_single_object(
         print("Strategy 'save_pc': Skipping training for", paths["file_id"])
         return None
 
-    dataloader = create_dataloader(cfg, paths)
+    dataloaders = create_dataloaders(cfg, paths)
 
     # Setup Filenames and Checkpoints
     filename = get_checkpoint_filename(cfg, paths["file_id"])
@@ -218,12 +232,12 @@ def process_single_object(
         return None
 
     # Initialize Model and Loss
-    model = get_model(output_type=cfg.output_type).to(DEVICE)
+    model = get_model().to(DEVICE)
     loss_fn = get_loss_function(cfg)
 
     # Handle Strategies (Remove Bad / Init)
     if cfg.strategy == "remove_bad":
-        is_bad = handle_bad_initialization(model, dataloader, loss_fn, checkpoint_path)
+        is_bad = handle_bad_initialization(model, dataloaders, loss_fn, checkpoint_path)
         if is_bad:
             return None
 
@@ -232,11 +246,10 @@ def process_single_object(
     # Training
     training.train(
         model=model,
-        train_dataloader=dataloader,
+        train_dataloader=dataloaders,
         epochs=cfg.epochs,
         lr=cfg.lr,
         steps_til_summary=cfg.steps_til_summary,
-        epochs_til_checkpoint=cfg.epochs_til_ckpt,
         model_dir=paths["logging_root"],
         loss_fn=loss_fn,
         summary_fn=utils.wandb_sdf_summary,
@@ -269,7 +282,7 @@ def main(cfg: DictConfig):
     first_state_dict = None
     if cfg.strategy == "same_init":
         print("Initializing shared reference weights...")
-        first_state_dict = get_model(output_type=cfg.output_type).state_dict()
+        first_state_dict = get_model().state_dict()
 
     file_ids = get_file_ids(cfg)
     x_0s = []  # To store weights for stats

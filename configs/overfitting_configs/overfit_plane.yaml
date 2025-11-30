@@ -5,6 +5,7 @@ mesh_jitter: False
 dataset_folder: "data/baseline/02691156/"
 dataset_expert_folder: "data/shapenetpart/PartAnnotation/02691156/points/"
 label_folder: "data/shapenetpart/PartAnnotation/02691156/expert_verified/points_label/"
+label_names: ["body", "wing", "tail", "engine"]
 common_file_ids: "data/common/plane_common_shapes.txt"
 wandb_dir: .
 batch_size: 2048
