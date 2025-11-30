@@ -1,7 +1,7 @@
 import os
 
-import dataio
-import diff_operators
+from . import dataio
+from . import diff_operators
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io.wavfile as wavfile

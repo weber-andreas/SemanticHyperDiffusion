@@ -35,11 +35,12 @@ multi_process:
   n_of_parts: 4
   first_weights_name:
   ignore_first: False
-n_points: 2048 #100000
+n_points: 100000
 is_meta: False #True
 strategy: first_weights
 clip_grad: False
 out_act: sigmoid
+logging: True
 mlp_config:
   out_size: 1
   use_leaky_relu: False

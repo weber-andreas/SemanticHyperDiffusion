@@ -44,7 +44,7 @@ def init_wandb(cfg: DictConfig) -> None:
         project="hyperdiffusion_overfitting",
         dir=cfg.wandb_dir,
         config=dict(cfg),
-        mode="disabled",
+        mode="online" if cfg.logging else "disabled",
     )
 
 
@@ -213,11 +213,12 @@ def process_single_object(
         print(f"Label {paths['label']} not found. Skipping.")
         return None
 
+    dataloaders = create_dataloaders(cfg, paths)
+
     if cfg.strategy == "save_pc":
         print("Strategy 'save_pc': Skipping training for", paths["file_id"])
         return None
 
-    dataloaders = create_dataloaders(cfg, paths)
 
     # Setup Filenames and Checkpoints
     filename = get_checkpoint_filename(cfg, paths["file_id"])

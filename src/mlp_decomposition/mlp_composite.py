@@ -66,8 +66,9 @@ class MLPComposite(nn.Module):
 
 
 def get_model(output_type="occ"):
+    #TODO: Remove hardcoding
     distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
-    total_hidden_size = 128
+    total_hidden_size = 256
 
     registry = {}
     for part_name in distribution.keys():
@@ -82,11 +83,12 @@ def get_model(output_type="occ"):
             "out_size": 1,
             "use_leaky_relu": False,
             "use_bias": True,
-            "multires": 10,
+            "multires": 4,
             "output_type": output_type,
         }
 
     model = MLPComposite(registry)
+    #print(model)
 
     return model
 
