@@ -1,6 +1,5 @@
 input_type: "mesh"
 output_type: "occ" # or sdf or occ
-in_out: False
 augment_on_the_fly: False
 mesh_jitter: False
 dataset_folder: "data/baseline/02691156/"
@@ -35,7 +34,7 @@ multi_process:
   n_of_parts: 4
   first_weights_name:
   ignore_first: False
-n_points: 2048
+n_points: 2048 #100000
 is_meta: False #True
 strategy: first_weights
 clip_grad: False

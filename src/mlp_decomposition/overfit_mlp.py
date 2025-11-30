@@ -79,7 +79,6 @@ def create_dataloader(cfg: DictConfig, paths: Dict[str, str]) -> DataLoader:
         pointcloud_path=paths["pointcloud"],
         pointcloud_expert_path=paths["expert"],
         label_path=paths["label"],
-        is_mesh=True,
         output_type=cfg.output_type,
         cfg=cfg,
     )

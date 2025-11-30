@@ -148,6 +148,7 @@ mlp_weights/*
 data/baseline/
 data/shapenetpart/
 data/shapenet/
+logs/
 
 .DS_Store
 ManifoldPlus/

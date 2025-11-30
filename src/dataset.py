@@ -276,7 +276,6 @@ class SemanticPointCloud(Dataset):
         pointcloud_path: str,
         pointcloud_expert_path: str,
         label_path: str,
-        is_mesh: bool = True,
         output_type: str = "occ",
         cfg=None,
     ):
@@ -295,20 +294,17 @@ class SemanticPointCloud(Dataset):
         self.occupancies = None
         self.labels = None
 
-        if is_mesh:
-            if cfg.strategy == "save_pc":
-                obj = self._load_mesh(pointcloud_path)
-                coords, occupancies = self._preprocess_mesh_data(obj)
-                pointcloud = np.hstack((coords, occupancies[:, None]))
-                # save pointcloud as binary file
-                self._save_pointcloud(pointcloud_path, coords, occupancies)
-            else:
-                # load pointcloud that was saved as binary file
-                pointcloud = self._load_binary_pointcloud(pointcloud_path)
+        # assume mesh data
+        if cfg.strategy == "save_pc":
+            obj = self._load_mesh(pointcloud_path)
+            coords, occupancies = self._preprocess_mesh_data(obj)
+            pointcloud = np.hstack((coords, occupancies[:, None]))
+            # save pointcloud as binary file
+            self._save_pointcloud(pointcloud_path, coords, occupancies)
+        # assume pre-computed pointcloud
         else:
-            raise NotImplementedError(
-                "Pointclouds are not supported for non-mesh data."
-            )
+            # load pointcloud that was saved as binary file
+            pointcloud = self._load_binary_pointcloud(pointcloud_path)
 
         # Load point clouds with expert annotations
         pointcloud_expert = self._load_raw_pointcloud(pointcloud_expert_path)
@@ -472,11 +468,10 @@ class SemanticPointCloud(Dataset):
     @staticmethod
     def get_pc_folder_name(cfg: DictConfig) -> str:
         base_dir = os.path.dirname(cfg.dataset_folder)
+        # base_dir = cfg.dataset_folder
+
         n_points = str(cfg.n_points)
         folder_name = f"{base_dir}_{n_points}_pc"
-
-        if cfg.get("in_out"):
-            folder_name += f"_{cfg.output_type}_in_out_{cfg.in_out}"
 
         return folder_name
 
@@ -530,13 +525,11 @@ if __name__ == "__main__":
         pointcloud_path=pointcloud_path + f"{file_id}.obj",
         pointcloud_expert_path=pointcloud_expert_path + f"{file_id}.pts",
         label_path=pointcloud_expert_label_path + f"{file_id}.seg",
-        is_mesh=True,
         output_type="occ",
         cfg=DictConfig(
             {
                 "n_points": 2048,
                 "strategy": "first_weights",
-                "in_out": True,
                 "output_type": "occ",
                 "dataset_folder": pointcloud_path,
             }
