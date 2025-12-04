@@ -284,6 +284,11 @@ class PartSemanticPointCloud(Dataset):
         self.coords = coords
         self.labels = labels
         self.occupancies = occupancies
+        #print(f"Part: {part_name}")
+        size = len(self.occupancies)
+        occ_prob = self.occupancies.mean()
+        #print(f"Number occupancies: {int(size*occ_prob)}")
+        #print(f"Number not occupied Points: {int(size - size*occ_prob)}")
 
     def __len__(self):
         if self.coords.shape[0] == 0:
@@ -404,16 +409,20 @@ class SemanticPointCloud(Dataset):
     def get_part_specific_pointcloud_datasets(
         self,
     ) -> dict[str, PartSemanticPointCloud]:
-        return {
-            part_name: PartSemanticPointCloud(
-                part_name,
-                self.on_surface_points,
-                self.coords[self.labels == idx + 1],
-                self.labels[self.labels == idx + 1],
-                self.occupancies[self.labels == idx + 1],
-            )
-            for idx, part_name in enumerate(self.cfg.label_names)
-        }
+        part_pointclouds = {}
+        for idx, part_name in enumerate(self.cfg.label_names):
+            # Zero out rest of the object
+            part_occupancies = (self.labels == idx + 1) * self.occupancies
+            part_pointclouds.update({
+                part_name: PartSemanticPointCloud(
+                    part_name,
+                    self.on_surface_points,
+                    self.coords,
+                    self.labels,
+                    part_occupancies,
+                )})
+        return part_pointclouds
+        
 
     def _nearest_neighbor_matching(self, pointcloud, pointcloud_expert, labels):
         nn_matcher = NearestNeighbors(n_neighbors=1, algorithm="kd_tree")
@@ -421,7 +430,8 @@ class SemanticPointCloud(Dataset):
 
         pointcloud_coords = pointcloud[:, :3]
         # find nearest neighbor for each point in pointcloud
-        _, indices = nn_matcher.kneighbors(pointcloud_coords, return_distance=True)
+        distances, indices = nn_matcher.kneighbors(pointcloud_coords, return_distance=True)
+        print(f" alignment error ({np.max(distances)}).")
         closest_expert_indices = indices.flatten()
         matched_labels = labels[closest_expert_indices]
         return matched_labels
