@@ -25,6 +25,8 @@ EOF
 
 # Set default values for our variables
 MANIFOLD_EXECUTABLE_DEFAULT="./ManifoldPlus/build/manifold"
+# INPUT_DIR_DEFAULT="./data/shapenet/02958343"
+# OUTPUT_DIR_DEFAULT="./data/baseline/car"
 INPUT_DIR_DEFAULT="./data/shapenet/03001627"
 OUTPUT_DIR_DEFAULT="./data/baseline/chair"
 DEPTH_DEFAULT=8

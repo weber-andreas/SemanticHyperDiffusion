@@ -22,3 +22,4 @@ if __name__ == "__main__":
     # Head dimension time the number of heads equals the embedding dimension
     print(estimate_transformer(n_embd=2880, n_layer=12, n_mlp_flattened=36737))
     print(estimate_transformer(n_embd=1024, n_layer=12, n_mlp_flattened=36737))
+    print(estimate_transformer(n_embd=2048, n_layer=12, n_mlp_flattened=36737))

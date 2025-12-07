@@ -46,6 +46,35 @@ def get_model(cfg):
     return model
 
 
+def create_splits_if_not_exist(cfg, files):
+    train_split_path = os.path.join(cfg.dataset_folder, "train_split.lst")
+    val_split_path = os.path.join(cfg.dataset_folder, "val_split.lst")
+    test_split_path = os.path.join(cfg.dataset_folder, "test_split.lst")
+
+    if os.path.exists(train_split_path):
+        return
+
+    np.random.shuffle(files)
+    n_files = len(files)
+    n_train = int(0.8 * n_files)
+    n_val = int(0.1 * n_files)
+    train_files = files[:n_train]
+    val_files = files[n_train : n_train + n_val]
+    test_files = files[n_train + n_val :]
+
+    with open(train_split_path, "w") as f:
+        for file in train_files:
+            f.write(file + "\n")
+
+    with open(val_split_path, "w") as f:
+        for file in val_files:
+            f.write(file + "\n")
+
+    with open(test_split_path, "w") as f:
+        for file in test_files:
+            f.write(file + "\n")
+
+
 @hydra.main(
     version_base=None,
     config_path="../../../configs/overfitting_configs",
@@ -91,6 +120,11 @@ def main(cfg: DictConfig):
         )
     lengths = []
     names = []
+
+    # Check if train, validation, and test splits exist
+    # If not, create them
+    create_splits_if_not_exist(cfg, files)
+
     train_object_names = np.genfromtxt(
         os.path.join(cfg.dataset_folder, "train_split.lst"), dtype="str"
     )

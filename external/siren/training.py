@@ -1,5 +1,4 @@
-"""Implements a generic training loop.
-"""
+"""Implements a generic training loop."""
 
 import os
 import shutil
@@ -38,14 +37,14 @@ def train(
             optim,
             step_size=cfg.scheduler.step_size,
             gamma=cfg.scheduler.gamma,
-            verbose=True,
+            # verbose=True,
         )
     elif cfg.scheduler.type == "adaptive":
         scheduler = ReduceLROnPlateau(
             optim,
             patience=cfg.scheduler.patience_adaptive,
             factor=cfg.scheduler.factor,
-            verbose=True,
+            # verbose=True,
             threshold=cfg.scheduler.threshold,
             min_lr=cfg.scheduler.min_lr,
         )

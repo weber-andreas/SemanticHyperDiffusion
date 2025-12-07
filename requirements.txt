@@ -8,7 +8,8 @@ scipy
 pandas
 h5py
 scikit-learn
-trimesh
+trimesh==3.23.3
+
 scikit-image
 scikit-video
 
@@ -17,7 +18,6 @@ matplotlib
 plyfile
 pyglet==1.5.27
 open3d
-trimesh
 rtree
 pyrender
 
