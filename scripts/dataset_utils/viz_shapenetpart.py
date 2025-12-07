@@ -60,7 +60,7 @@ def visualize_single_pointcloud(
     category: str = "Airplane",
     visualize_2d: bool = False,
     object_index: Optional[int] = None,
-    file_id: Optional[str] = "1a888c2c86248bbcf2b0736dd4d8afe0",
+    file_id: Optional[str] = None,
 ) -> None:
     """Visualize a single point cloud with its labels."""
     if file_id:
@@ -201,11 +201,12 @@ def main(args: argparse.Namespace) -> None:
             raise ValueError(
                 "Only one category can be specified for single object visualization."
             )
+        file_id = None if args.object_index is not None else args.file_id
         visualize_single_pointcloud(
             metadata=metadata,
             base_path=base_path,
             object_index=args.object_index,
-            file_id=args.file_id,
+            file_id=file_id,
             category=args.categories[0],
             visualize_2d=args.visualize_2d,
         )
@@ -247,7 +248,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--file_id",
         type=str,
-        default="1a888c2c86248bbcf2b0736dd4d8afe0",
+        # default="1a888c2c86248bbcf2b0736dd4d8afe0",
         help="File ID of object to visualize.",
     )
     parser.add_argument(

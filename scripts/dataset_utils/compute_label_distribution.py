@@ -159,7 +159,7 @@ def visualize_distribution(label_percentages, category, output_path):
 
 
 def main():
-    CATEGORY = "Airplane"  # Airplane, Chair, Car
+    CATEGORY = "Chair"  # Airplane, Chair, Car
 
     paths, directory, label_names = get_paths_and_metadata(CATEGORY)
     common_file_ids = get_common_files(paths, CATEGORY)

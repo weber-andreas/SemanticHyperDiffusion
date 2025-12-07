@@ -45,16 +45,22 @@ def load_semantic_point_cloud(
     points_files = glob(os.path.join(points_path, "*.pts"))
     points_files = natsort.natsorted(points_files)
 
-    if specific_index is None:
+    if file_id is not None:
         # Find index of the file in point_files matching the given file_id
-        specific_index = next(
-            (i for i, file in enumerate(points_files) if get_file_id(file) == file_id)
-        )
+        try:
+            specific_index = next(
+                (
+                    i
+                    for i, file in enumerate(points_files)
+                    if get_file_id(file) == file_id
+                )
+            )
+        except StopIteration:
+            raise ValueError(f"File ID {file_id} not found in points files.")
 
     point_cloud = np.loadtxt(points_files[specific_index]).astype("float32")
-    logging.info("Loaded file: %s", points_files[specific_index])
-
     file_id = get_file_id(points_files[specific_index])
+    logging.info("Loaded file: %s", points_files[specific_index])
 
     # load expert verified labels
     if expert_verified:
