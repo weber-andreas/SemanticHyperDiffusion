@@ -145,7 +145,10 @@ dmypy.json
 
 # Ignore checkpoints, mlp weights and dataset
 mlp_weights/*
-data/
+data/baseline/
+data/shapenetpart/
+data/shapenet/
+logs/
 
 .DS_Store
 ManifoldPlus/

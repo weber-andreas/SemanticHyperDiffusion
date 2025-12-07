@@ -1,8 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_normals.pointnet2_utils import \
-    PointNetSetAbstraction
+from .pointnet2_utils import PointNetSetAbstraction
 
 
 class get_model(nn.Module):

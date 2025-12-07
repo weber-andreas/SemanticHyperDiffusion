@@ -1,9 +1,12 @@
 input_type: "mesh"
 output_type: "occ" # or sdf or occ
-in_out: True
 augment_on_the_fly: False
 mesh_jitter: False
-dataset_folder: "data/baseline/02691156_2048_pc/"
+dataset_folder: "data/baseline/02691156/"
+dataset_expert_folder: "data/shapenetpart/PartAnnotation/02691156/points/"
+label_folder: "data/shapenetpart/PartAnnotation/02691156/expert_verified/points_label/"
+label_names: ["body", "wing", "tail", "engine"]
+common_file_ids: "data/common/plane_common_shapes.txt"
 wandb_dir: .
 batch_size: 2048
 lr: 1e-2
@@ -11,7 +14,7 @@ model_type: mlp_3d
 bayesian: False
 logging_root: './logs'
 shape_modify: 'no'
-exp_name: "insert_name_here"
+exp_name: "test_experiment"
 steps_til_summary: 100
 epochs_til_ckpt: 1
 hidden_features: 128
@@ -32,11 +35,13 @@ multi_process:
   n_of_parts: 4
   first_weights_name:
   ignore_first: False
-n_points: 2048
-is_meta: True
+n_points: 100000
+is_meta: False #True
 strategy: first_weights
 clip_grad: False
 out_act: sigmoid
+logging: True
+# unused in semantic decomposition
 mlp_config:
   out_size: 1
   use_leaky_relu: False

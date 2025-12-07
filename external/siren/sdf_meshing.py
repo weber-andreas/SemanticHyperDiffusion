@@ -183,10 +183,7 @@ def create_mesh(
 
     head = 0
 
-    # Prefer an explicit device if provided; otherwise infer from the decoder.
-    device = device or _decoder_device(decoder)
     while head < num_samples:
-        # print(head)
         sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].to(
             device
         )

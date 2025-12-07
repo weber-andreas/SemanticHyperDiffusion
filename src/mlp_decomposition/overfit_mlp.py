@@ -1,30 +1,26 @@
 """Reproduces Sec. 4.2 in main paper and Sec. 4 in Supplement."""
 
-import copy
 import os
-import hydra
-import numpy as np
-import torch
-import trimesh
-from omegaconf import DictConfig, open_dict
-from scipy.spatial.transform import Rotation
-from torch.utils.data import DataLoader
-from functools import partial
-import wandb
-
-# Enable import from parent package
 import sys
+import hydra
+import torch
+import wandb
+from functools import partial
+from typing import List, Dict, Optional, Any
+from omegaconf import DictConfig, open_dict
+from torch.utils.data import DataLoader
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(ROOT_DIR)
 sys.path.append("external/")
 sys.path.append("external/siren/")
 
-
-from external.siren import dataio, loss_functions, sdf_meshing, training, utils
-from external.siren.experiment_scripts.test_sdf import SDFDecoder
-from src.hd_utils import render_mesh
-from src.mlp_models import MLP3D
+from external.siren import loss_functions, sdf_meshing, utils
+from src.mlp_decomposition.test_mlp import SDFDecoder
+from src.dataset import SemanticPointCloud
+from src.mlp_decomposition.mlp_composite import get_model
+from src.mlp_decomposition import training
+from src.mlp_decomposition import loss
 
 DEVICE = torch.device(
     "cuda:0"
@@ -32,13 +28,242 @@ DEVICE = torch.device(
     else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 
+EXCLUDED_FILES = [
+    "train_split.lst",
+    "test_split.lst",
+    "val_split.lst",
+    "train_split_small.lst",
+    "test_split_small.lst",
+    "val_split_small.lst",
+]
 
-def get_model(cfg):
-    if cfg.model_type == "mlp_3d":
-        model = MLP3D(**cfg.mlp_config)
-    nparameters = sum(p.numel() for p in model.parameters())
-    print(model)
-    print("Total number of parameters: %d" % nparameters)
+
+def init_wandb(cfg: DictConfig) -> None:
+    """Initializes Weights and Biases logging."""
+    wandb.init(
+        project="hyperdiffusion_overfitting",
+        dir=cfg.wandb_dir,
+        config=dict(cfg),
+        mode="online" if cfg.logging else "disabled",
+    )
+
+
+def get_file_ids(cfg: DictConfig) -> List[str]:
+    """Retrieves and filters the list of object files to process."""
+    pointcloud_folder = SemanticPointCloud.get_pc_folder_name(cfg)
+
+    # check if common file ids are provided
+    if cfg.common_file_ids is not None:
+        with open(cfg.common_file_ids, "r") as f:
+            file_ids = f.read().splitlines()
+        return file_ids
+
+    # otherwise use all files in specified folder
+    file_ids = [f for f in os.listdir(pointcloud_folder) if f not in EXCLUDED_FILES]
+    return file_ids
+
+
+def get_paths(cfg: DictConfig, file_id: str) -> Dict[str, str]:
+    """Constructs necessary file paths for a specific object."""
+    return {
+        "file_id": file_id,
+        "pointcloud": os.path.join(cfg.dataset_folder, file_id + ".obj"),
+        "expert": os.path.join(cfg.dataset_expert_folder, file_id + ".pts"),
+        "label": os.path.join(cfg.label_folder, file_id + ".seg"),
+        "logging_root": os.path.join(cfg.logging_root, cfg.exp_name),
+    }
+
+
+def create_dataloaders(cfg: DictConfig, paths: Dict[str, str]) -> Dict[str, DataLoader]:
+    """Creates a dictionary of DataLoaders, one for each part."""
+    sdf_dataset = SemanticPointCloud(
+        on_surface_points=cfg.batch_size,
+        pointcloud_path=paths["pointcloud"],
+        pointcloud_expert_path=paths["expert"],
+        label_path=paths["label"],
+        output_type=cfg.output_type,
+        cfg=cfg,
+    )
+
+    part_datasets = sdf_dataset.get_part_specific_pointcloud_datasets()
+    dataloaders = {}
+    for part_name, dataset in part_datasets.items():
+        if len(dataset) > 0:
+            dataloaders[part_name] = DataLoader(
+                dataset, shuffle=True, batch_size=1, pin_memory=True, num_workers=0
+            )
+        else:
+            print(f"Warning: Dataset for part '{part_name}' is empty. Skipping.")
+    return dataloaders
+
+
+def get_loss_function(cfg: DictConfig) -> Any:
+    """Selects the appropriate loss function based on config."""
+    if cfg.output_type == "occ":
+
+        fn = loss.single_part_loss
+        # fn = (
+        #     loss_functions.occ_tanh
+        #     if cfg.out_act == "tanh"
+        #     else loss_functions.occ_sigmoid
+        # )
+
+    else:
+        fn = loss_functions.sdf
+    return partial(fn, cfg=cfg)
+
+
+def get_checkpoint_filename(cfg: DictConfig, file_id: str) -> str:
+    """Generates the standardized checkpoint filename."""
+    filename = f"{cfg.output_type}_{file_id}"
+    return filename
+
+
+def handle_bad_initialization(
+    model: torch.nn.Module, dataloader: DataLoader, loss_fn: Any, checkpoint_path: str
+) -> bool:
+    """
+    Checks if a pre-existing model has high loss (bad initialization).
+    Returns True if the model is 'bad' (outlier) and processing should skip/stop.
+    """
+    if not os.path.exists(checkpoint_path):
+        return False
+
+    model.load_state_dict(torch.load(checkpoint_path))
+    model.eval()
+
+    with torch.no_grad():
+        for part_name, dataloader in dataloader.items():
+            try:
+                model_input, gt = next(iter(dataloader))
+                model_input = {k: v.to(DEVICE) for k, v in model_input.items()}
+                gt = {k: v.to(DEVICE) for k, v in gt.items()}
+
+                model_output = model(model_input, part_name=part_name)
+                loss = loss_fn(model_output, gt, model)
+
+                if loss.get("occupancy", 0) > 0.5:
+                    print(f"Outlier detected for part {part_name} based on loss:", loss)
+                    return True
+            except StopIteration:
+                pass
+
+    return False
+
+
+def initialize_model_weights(
+    model: torch.nn.Module,
+    cfg: DictConfig,
+    checkpoint_path: str,
+    reference_state_dict: Optional[Dict],
+) -> None:
+    """Loads weights into the model based on the selected strategy."""
+
+    if cfg.strategy == "continue" and os.path.exists(checkpoint_path):
+        # Continue training from existing checkpoint
+        model.load_state_dict(torch.load(checkpoint_path))
+
+    elif reference_state_dict is not None and cfg.strategy not in [
+        "random",
+        "first_weights_kl",
+    ]:
+        # Initialize from a shared reference (e.g., from the first object trained)
+        print("Loading shared reference weights.")
+        model.load_state_dict(reference_state_dict)
+
+
+def visualize_mesh(cfg: DictConfig, checkpoint_path: str, filename: str) -> None:
+    """Generates and saves a mesh from the trained implicit function."""
+    output_dir = os.path.join(cfg.logging_root, f"{cfg.exp_name}_ply")
+    os.makedirs(output_dir, exist_ok=True)
+
+    output_path = os.path.join(output_dir, filename)
+    sdf_decoder = SDFDecoder(checkpoint_path, device=DEVICE)
+    sdf_meshing.create_mesh(sdf_decoder, output_path, N=256, level=0, device=DEVICE)
+
+
+def update_weight_statistics(x_0s: List[torch.Tensor], model: torch.nn.Module) -> None:
+    """Collects flattened weights and prints variance statistics."""
+    state_dict = model.state_dict()
+    weights = [state_dict[w].flatten().cpu() for w in state_dict]
+    weights_flat = torch.hstack(weights)
+
+    x_0s.append(weights_flat)
+
+    if len(x_0s) > 1:
+        tmp = torch.stack(x_0s)
+        var = torch.var(tmp, dim=0)
+        print(
+            f"Shape: {var.shape} | Mean: {var.mean().item():.5f} | "
+            f"Std: {var.std().item():.5f} | Min: {var.min().item():.5f} | "
+            f"Max: {var.max().item():.5f}"
+        )
+
+
+def process_single_object(
+    cfg: DictConfig, file_id: str, idx: int, reference_state_dict: Optional[Dict]
+) -> Optional[torch.nn.Module]:
+    """
+    Orchestrates the training pipeline for a single 3D object.
+    Returns the trained model if successful, else None.
+    """
+    paths = get_paths(cfg, file_id)
+
+    if not os.path.exists(paths["label"]):
+        print(f"Label {paths['label']} not found. Skipping.")
+        return None
+
+    dataloaders = create_dataloaders(cfg, paths)
+
+    if cfg.strategy == "save_pc":
+        print("Strategy 'save_pc': Skipping training for", paths["file_id"])
+        return None
+
+
+    # Setup Filenames and Checkpoints
+    filename = get_checkpoint_filename(cfg, paths["file_id"])
+    checkpoint_path = os.path.join(paths["logging_root"], f"{filename}_model_final.pth")
+
+    if (
+        os.path.exists(checkpoint_path)
+        and cfg.strategy != "continue"
+        and cfg.strategy != "remove_bad"
+    ):
+        print("Checkpoint exists. Skipping:", checkpoint_path)
+        return None
+
+    # Initialize Model and Loss
+    model = get_model().to(DEVICE)
+    loss_fn = get_loss_function(cfg)
+
+    # Handle Strategies (Remove Bad / Init)
+    if cfg.strategy == "remove_bad":
+        is_bad = handle_bad_initialization(model, dataloaders, loss_fn, checkpoint_path)
+        if is_bad:
+            return None
+
+    initialize_model_weights(model, cfg, checkpoint_path, reference_state_dict)
+
+    # Training
+    training.train(
+        model=model,
+        train_dataloader=dataloaders,
+        epochs=cfg.epochs,
+        lr=cfg.lr,
+        steps_til_summary=cfg.steps_til_summary,
+        model_dir=paths["logging_root"],
+        loss_fn=loss_fn,
+        summary_fn=utils.wandb_sdf_summary,
+        double_precision=False,
+        clip_grad=cfg.clip_grad,
+        wandb=wandb,
+        filename=filename,
+        cfg=cfg,
+    )
+
+    # Visualization (Only for first 5)
+    if idx < 5:
+        visualize_mesh(cfg, checkpoint_path, filename)
 
     return model
 
@@ -49,235 +274,41 @@ def get_model(cfg):
     config_name="overfit_plane",
 )
 def main(cfg: DictConfig):
-    wandb.init(
-        project="hyperdiffusion_overfitting",
-        dir=cfg.wandb_dir,
-        config=dict(cfg),
-        mode="online",
-    )
-    first_state_dict = None
-    if cfg.strategy == "same_init":
-        first_state_dict = get_model(cfg).state_dict()
-    x_0s = []
+    init_wandb(cfg)
+
     with open_dict(cfg):
         cfg.mlp_config.output_type = cfg.output_type
-    curr_lr = cfg.lr
-    logging_root_path = os.path.join(cfg.logging_root, cfg.exp_name)
-    mesh_jitter = cfg.mesh_jitter
-    multip_cfg = cfg.multi_process
-    files = [
-        file
-        for file in os.listdir(cfg.dataset_folder)
-        if file not in ["train_split.lst", "test_split.lst", "val_split.lst"]
-    ]
 
-    if multip_cfg.enabled:
-        if multip_cfg.ignore_first:
-            files = files[1:]  # Ignoring the first one
-        count = len(files)
-        per_proc_count = count // multip_cfg.n_of_parts
-        start_index = multip_cfg.part_id * per_proc_count
-        end_index = min(count, start_index + per_proc_count)
-        files = files[start_index:end_index]
-        if cfg.strategy == "first_weights":
-            first_state_dict = torch.load(
-                os.path.join(logging_root_path, multip_cfg.first_weights_name)
-            )
-        print(
-            f"Proc {multip_cfg.part_id} is responsible between {start_index} -> {end_index}"
+    # Global State Initialization
+    first_state_dict = None
+    if cfg.strategy == "same_init":
+        print("Initializing shared reference weights...")
+        first_state_dict = get_model().state_dict()
+
+    file_ids = get_file_ids(cfg)
+    x_0s = []  # To store weights for stats
+
+    for i, file_id in enumerate(file_ids):
+
+        # Updated call: directly assigns the model, no tuple unpacking
+        trained_model = process_single_object(
+            cfg, file_id, idx=i, reference_state_dict=first_state_dict
         )
-    lengths = []
-    names = []
-    train_object_names = np.genfromtxt(
-        os.path.join(cfg.dataset_folder, "train_split.lst"), dtype="str"
-    )
-    train_object_names = set(train_object_names)
 
-    for i, file in enumerate(files):
-        # We used to have mesh jittering for augmentation but not using it anymore
-        for j in range(10 if mesh_jitter and i > 0 else 1):
-            # Quick workaround to rename from obj to off
-            # if file.endswith(".obj"):
-            #     file = file[:-3] + "off"
+        if trained_model is None:
+            continue
 
-            # remove .npy
-            file = file[:-4]
-            if not (file in train_object_names):
-                print(f"File {file} not in train_split")
-                continue
+        # Keep weights of first MLP for Global State Initialization
+        if (
+            i == 0
+            and first_state_dict is None
+            and cfg.strategy in ["first_weights", "first_weights_kl"]
+            and not cfg.multi_process.enabled
+        ):
+            first_state_dict = trained_model.state_dict()
+            print(f"Captured first weights. LR: {cfg.lr}")
 
-            filename = file.split(".")[0]
-            filename = f"{filename}_jitter_{j}"
-
-            sdf_dataset = dataio.PointCloud(
-                os.path.join(cfg.dataset_folder, file),
-                on_surface_points=cfg.batch_size,
-                is_mesh=True,
-                output_type=cfg.output_type,
-                out_act=cfg.out_act,
-                n_points=cfg.n_points,
-                cfg=cfg,
-            )
-            dataloader = DataLoader(
-                sdf_dataset, shuffle=True, batch_size=1, pin_memory=True, num_workers=0
-            )
-            if cfg.strategy == "save_pc":
-                continue
-            elif cfg.strategy == "diagnose":
-                lengths.append(len(sdf_dataset.coords))
-                names.append(file)
-                continue
-
-            # Define the model.
-            model = get_model(cfg).to(DEVICE)
-
-            # Define the loss
-            loss_fn = loss_functions.sdf
-            if cfg.output_type == "occ":
-                loss_fn = (
-                    loss_functions.occ_tanh
-                    if cfg.out_act == "tanh"
-                    else loss_functions.occ_sigmoid
-                )
-            loss_fn = partial(loss_fn, cfg=cfg)
-            summary_fn = utils.wandb_sdf_summary
-
-            filename = f"{cfg.output_type}_{filename}"
-            checkpoint_path = os.path.join(
-                logging_root_path, f"{filename}_model_final.pth"
-            )
-            if os.path.exists(checkpoint_path):
-                print("Checkpoint exists:", checkpoint_path)
-                continue
-            if cfg.strategy == "remove_bad":
-                model.load_state_dict(torch.load(checkpoint_path))
-                model.eval()
-                with torch.no_grad():
-                    (model_input, gt) = next(iter(dataloader))
-                    model_input = {
-                        key: value.cuda() for key, value in model_input.items()
-                    }
-                    gt = {key: value.cuda() for key, value in gt.items()}
-                    model_output = model(model_input)
-                    loss = loss_fn(model_output, gt, model)
-                if loss["occupancy"] > 0.5:
-                    print("Outlier:", loss)
-                continue
-            if cfg.strategy == "continue":
-                if not os.path.exists(checkpoint_path):
-                    continue
-                model.load_state_dict(torch.load(checkpoint_path))
-            elif (
-                first_state_dict is not None
-                and cfg.strategy != "random"
-                and cfg.strategy != "first_weights_kl"
-            ):
-                print("loaded")
-                model.load_state_dict(first_state_dict)
-
-            training.train(
-                model=model,
-                train_dataloader=dataloader,
-                epochs=cfg.epochs,
-                lr=curr_lr,
-                steps_til_summary=cfg.steps_til_summary,
-                epochs_til_checkpoint=cfg.epochs_til_ckpt,
-                model_dir=logging_root_path,
-                loss_fn=loss_fn,
-                summary_fn=summary_fn,
-                double_precision=False,
-                clip_grad=cfg.clip_grad,
-                wandb=wandb,
-                filename=filename,
-                cfg=cfg,
-            )
-            if (
-                i == 0
-                and first_state_dict is None
-                and (
-                    cfg.strategy == "first_weights"
-                    or cfg.strategy == "first_weights_kl"
-                )
-                and not multip_cfg.enabled
-            ):
-                first_state_dict = model.state_dict()
-                print(curr_lr)
-            state_dict = model.state_dict()
-
-            # Calculate statistics on the MLP
-            weights = []
-            for weight in state_dict:
-                weights.append(state_dict[weight].flatten().cpu())
-            weights = torch.hstack(weights)
-            x_0s.append(weights)
-            tmp = torch.stack(x_0s)
-            var = torch.var(tmp, dim=0)
-            print(
-                var.shape,
-                var.mean().item(),
-                var.std().item(),
-                var.min().item(),
-                var.max().item(),
-            )
-            print(var.shape, torch.var(tmp))
-
-            # For the first 5 data, outputting shapes
-            if i < 5:
-                sdf_decoder = SDFDecoder(
-                    cfg.model_type,
-                    checkpoint_path,
-                    "nerf" if cfg.model_type == "nerf" else "mlp",
-                    cfg,
-                )
-                os.makedirs(
-                    os.path.join(cfg.logging_root, f"{cfg.exp_name}_ply"),
-                    exist_ok=True,
-                )
-                if cfg.mlp_config.move:
-                    imgs = []
-                    for time_val in range(sdf_dataset.total_time):
-                        vertices, faces, _ = sdf_meshing.create_mesh(
-                            sdf_decoder,
-                            os.path.join(
-                                cfg.logging_root,
-                                f"{cfg.exp_name}_ply",
-                                filename + "_" + str(time_val),
-                            ),
-                            N=256,
-                            level=(
-                                0.5
-                                if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
-                                else 0
-                            ),
-                            time_val=time_val,
-                        )
-                        rot_matrix = Rotation.from_euler(
-                            "zyx", [45, 180, 90], degrees=True
-                        )
-                        tmp = copy.deepcopy(faces[:, 1])
-                        faces[:, 1] = faces[:, 2]
-                        faces[:, 2] = tmp
-                        obj = trimesh.Trimesh(rot_matrix.apply(vertices), faces)
-                        img, _ = render_mesh(obj)
-                        imgs.append(img)
-                    imgs = np.array(imgs)
-                    imgs = np.transpose(imgs, axes=(0, 3, 1, 2))
-                    wandb.log({"animation": wandb.Video(imgs, fps=16)})
-                else:
-                    sdf_meshing.create_mesh(
-                        sdf_decoder,
-                        os.path.join(
-                            cfg.logging_root,
-                            f"{cfg.exp_name}_ply",
-                            filename,
-                        ),
-                        N=256,
-                        level=(
-                            0
-                            if cfg.output_type == "occ" and cfg.out_act == "sigmoid"
-                            else 0
-                        ),
-                    )
+        update_weight_statistics(x_0s, trained_model)
 
 
 if __name__ == "__main__":

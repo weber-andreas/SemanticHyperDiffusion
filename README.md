@@ -11,7 +11,8 @@ Make sure to execute `export PYTHONPATH="."` before running the code.
 3. Effective Dataset Size: 3237 - 488 = 2749 samples.
 4. Batches per Epoch: ceil(2749 / 8) = 344.
 
-
+## Preprocessing
+Use ManifoldPlus to convert 3D triangle mesh to a watertight manifold mesh.
 
 ## Metrics
 **Chamfer Distance**:

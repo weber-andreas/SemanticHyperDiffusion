@@ -1,15 +1,18 @@
 """Implements a generic training loop."""
 
 import os
-import shutil
 import time
 
 import numpy as np
 import torch
-import utils
-from torch.optim.lr_scheduler import LambdaLR, ReduceLROnPlateau, StepLR
-from torch.utils.tensorboard import SummaryWriter
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from tqdm.autonotebook import tqdm
+
+DEVICE = (
+    "mps"
+    if torch.backends.mps.is_available()
+    else "cuda" if torch.cuda.is_available() else "cpu"
+)
 
 
 def train(
@@ -44,7 +47,6 @@ def train(
             optim,
             patience=cfg.scheduler.patience_adaptive,
             factor=cfg.scheduler.factor,
-            # verbose=True,
             threshold=cfg.scheduler.threshold,
             min_lr=cfg.scheduler.min_lr,
         )
@@ -90,8 +92,10 @@ def train(
             for step, (model_input, gt) in enumerate(train_dataloader):
                 start_time = time.time()
 
-                model_input = {key: value.cuda() for key, value in model_input.items()}
-                gt = {key: value.cuda() for key, value in gt.items()}
+                model_input = {
+                    key: value.to(DEVICE) for key, value in model_input.items()
+                }
+                gt = {key: value.to(DEVICE) for key, value in gt.items()}
 
                 if double_precision:
                     model_input = {
