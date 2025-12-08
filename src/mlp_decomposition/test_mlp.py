@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 import torch
 import configargparse
+from omegaconf import OmegaConf
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(ROOT_DIR)
@@ -17,9 +18,9 @@ from src.mlp_decomposition.mlp_composite import get_model
 
 
 class SDFDecoder(torch.nn.Module):
-    def __init__(self, checkpoint_path, device, output_type="sdf"):
+    def __init__(self, checkpoint_path, device, output_type="sdf", cfg=None):
         super().__init__()
-        self.model = get_model(output_type=output_type)
+        self.model = get_model(cfg, output_type=output_type)
 
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path))
@@ -99,7 +100,12 @@ def main():
         else "mps" if torch.backends.mps.is_available() else "cpu"
     )
 
-    sdf_decoder = SDFDecoder(opt.checkpoint_path, DEVICE, output_type=opt.output_type)
+    if opt.config_filepath:
+        cfg = OmegaConf.load(opt.config_filepath)
+    else:
+        cfg = None
+
+    sdf_decoder = SDFDecoder(opt.checkpoint_path, DEVICE, output_type=opt.output_type, cfg=cfg)
     name = Path(opt.checkpoint_path).stem
     root_path = os.path.join(opt.logging_root, opt.experiment_name)
     utils.cond_mkdir(root_path)

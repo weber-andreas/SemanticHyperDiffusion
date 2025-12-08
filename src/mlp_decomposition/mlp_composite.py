@@ -64,26 +64,34 @@ class MLPComposite(nn.Module):
         for part in self.parts.values():
             part.unflatten(flat_vector)
 
+    
 
-def get_model(output_type="occ"):
-    # TODO: Remove hardcoding
-    distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
-    total_hidden_size = 256
+def get_model(cfg, output_type="occ"):
+    distribution = cfg.part_distribution
+    part_mlp_config = cfg.part_mlp_config
+
+    num_layers = part_mlp_config["num_layers"]
+    total_hidden_size = part_mlp_config["total_hidden_size"]
+    input_size = part_mlp_config["input_size"]
+    output_size = part_mlp_config["output_size"]
+    multires = part_mlp_config["multires"]
+    use_leaky_relu = part_mlp_config["use_leaky_relu"]
+    use_bias = part_mlp_config["use_bias"]
+
 
     registry = {}
     for part_name in distribution.keys():
-        num_layers = 3
         hidden_neurons_per_layer = int(total_hidden_size * distribution[part_name])
-        # ensure that the hidden neurons per layer
-        hidden_neurons_per_layer = max(8, hidden_neurons_per_layer)
+        # ensure minimum hidden neurons per layer
+        hidden_neurons_per_layer = max(16, hidden_neurons_per_layer)
 
         registry[part_name] = {
-            "input_size": 3,
+            "input_size": input_size,
             "hidden_neurons": [hidden_neurons_per_layer] * num_layers,
-            "out_size": 1,
-            "use_leaky_relu": False,
-            "use_bias": True,
-            "multires": 4,
+            "out_size": output_size,
+            "use_leaky_relu": use_leaky_relu,
+            "use_bias": use_bias,
+            "multires": multires,
             "output_type": output_type,
         }
 

@@ -146,7 +146,7 @@ def train(
                     pbar.update(1)
                     pbar.set_description(
                         "Epoch %d, Part %s, Total loss %0.6f, iteration time %0.6f"
-                        % (epoch, part_name, train_loss, time.time() - start_time)
+                        % (epoch, part_name, train_loss.item(), time.time() - start_time)
                     )
 
                     total_steps += 1

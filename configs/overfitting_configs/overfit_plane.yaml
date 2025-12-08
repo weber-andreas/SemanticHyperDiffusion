@@ -14,7 +14,7 @@ model_type: mlp_3d
 bayesian: False
 logging_root: './logs'
 shape_modify: 'no'
-exp_name: "test_experiment"
+exp_name: "overfit_plane"
 steps_til_summary: 100
 epochs_til_ckpt: 1
 hidden_features: 128
@@ -41,10 +41,23 @@ strategy: first_weights
 clip_grad: False
 out_act: sigmoid
 logging: True
-# unused in semantic decomposition
 mlp_config:
   out_size: 1
   use_leaky_relu: False
   hidden_neurons: [128, 128, 128]
   multires: 4
   move: False
+# for semantic decomposition
+part_distribution:
+  body: 0.45
+  wing: 0.33
+  tail: 0.13
+  engine: 0.09
+part_mlp_config:
+  total_hidden_size: 256
+  input_size: 3
+  output_size: 1
+  num_layers: 3
+  multires: 4
+  use_leaky_relu: False
+  use_bias: True

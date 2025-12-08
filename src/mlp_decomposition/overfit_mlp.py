@@ -233,7 +233,7 @@ def process_single_object(
         return None
 
     # Initialize Model and Loss
-    model = get_model().to(DEVICE)
+    model = get_model(cfg).to(DEVICE)
     loss_fn = get_loss_function(cfg)
 
     # Handle Strategies (Remove Bad / Init)
@@ -283,7 +283,7 @@ def main(cfg: DictConfig):
     first_state_dict = None
     if cfg.strategy == "same_init":
         print("Initializing shared reference weights...")
-        first_state_dict = get_model().state_dict()
+        first_state_dict = get_model(cfg).state_dict()
 
     file_ids = get_file_ids(cfg)
     x_0s = []  # To store weights for stats

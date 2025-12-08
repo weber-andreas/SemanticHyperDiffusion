@@ -20,6 +20,7 @@ pyglet==1.5.27
 open3d
 rtree
 pyrender
+seaborn
 
 
 # Utilities

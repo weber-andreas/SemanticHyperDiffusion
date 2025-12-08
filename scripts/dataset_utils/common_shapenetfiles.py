@@ -19,7 +19,7 @@ def get_file_ids_in_dir(directory: pathlib.Path) -> set[str]:
     """Get all file names in a given directory."""
     # can be either .pts or .npy files
     file_names = {
-        f.name for f in directory.glob("*.*") if f.suffix in {".pts", ".npy", ".seg"}
+        f.name for f in directory.glob("*.*") if f.suffix in {".pts", ".npy", ".seg", ".obj"}
     }
     file_ids = {str.split(name, ".")[0] for name in file_names}
     return file_ids
@@ -47,7 +47,7 @@ def get_common_shapenet_file_ids(
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    CATEGORY = "Airplane"  # Airplane, Chair, Car
+    CATEGORY = "Car"  # Airplane, Chair, Car
 
     shapenetpart_base_path = pathlib.Path("./data/shapenetpart/PartAnnotation")
     shapenet_base_path = pathlib.Path("./data/baseline/")
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         shapenetpart_base_path / meta_data[CATEGORY]["directory"] / "points"
     )
     shapenet_points_path = shapenet_base_path / (
-        meta_data[CATEGORY]["directory"] + "_2048_pc"
+        meta_data[CATEGORY]["directory"] #+ "_2048_pc"
     )
     shapenetpart_expert_label_path = (
         shapenetpart_base_path

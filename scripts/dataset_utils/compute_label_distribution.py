@@ -11,6 +11,7 @@ import numpy as np
 import seaborn as sns
 from omegaconf import OmegaConf
 from tqdm import tqdm
+import argparse
 
 # Add project root to sys.path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -44,7 +45,7 @@ def get_paths_and_metadata(category):
         "shapenetpart_base": shapenetpart_base_path,
         "shapenet_base": shapenet_base_path,
         "shapenetpart_points": shapenetpart_base_path / directory / "points",
-        "shapenet_points": shapenet_base_path / (directory + "_2048_pc"),
+        "shapenet_points": shapenet_base_path / (directory + "_100000_pc"),
         "shapenetpart_expert_label": shapenetpart_base_path
         / directory
         / "expert_verified/points_label",
@@ -53,11 +54,15 @@ def get_paths_and_metadata(category):
 
 
 def get_common_files(paths, category):
+    print(paths["shapenet_points"])
     shapenetpart_file_ids = get_file_ids_in_dir(paths["shapenetpart_points"])
     shapenet_file_ids = get_file_ids_in_dir(paths["shapenet_points"])
     shapenetpart_expert_label_ids = get_file_ids_in_dir(
         paths["shapenetpart_expert_label"]
     )
+    print(f"ShapeNetPart files: {len(shapenetpart_file_ids)}")
+    print(f"ShapeNet files: {len(shapenet_file_ids)}")
+    print(f"ShapeNetPart expert label files: {len(shapenetpart_expert_label_ids)}")
 
     category_prefix = "plane" if category == "Airplane" else category.lower()
     problematic_file_path = (
@@ -100,10 +105,10 @@ def compute_distribution(common_file_ids, paths, directory, label_names):
                 output_type="occ",
                 cfg=OmegaConf.create(
                     {
-                        "n_points": 2048,
+                        "n_points": 100000,
                         "strategy": "first_weights",
                         "vox_resolution": 32,
-                        "dataset_folder": str(paths["shapenet_base"] / directory),
+                        "dataset_folder": str(paths["shapenet_base"] / directory) + "/",
                     }
                 ),
             )
@@ -159,7 +164,11 @@ def visualize_distribution(label_percentages, category, output_path):
 
 
 def main():
-    CATEGORY = "Chair"  # Airplane, Chair, Car
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--category", type=str, default="Chair", choices=["Chair", "Airplane", "Car"])
+    args = parser.parse_args()
+
+    CATEGORY = args.category
 
     paths, directory, label_names = get_paths_and_metadata(CATEGORY)
     common_file_ids = get_common_files(paths, CATEGORY)
