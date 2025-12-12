@@ -64,6 +64,12 @@ class MLPComposite(nn.Module):
         for part in self.parts.values():
             part.unflatten(flat_vector)
 
+    def num_trainable_parameters(self):
+        """
+        Calculates the total number of trainable parameters
+        across all sub-networks in the composite model.
+        """
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
 
 def get_model(cfg, output_type="occ"):

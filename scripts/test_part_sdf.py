@@ -114,7 +114,8 @@ def main():
     utils.cond_mkdir(output_dir)
 
     # Generate the mesh for the full shape
-    generate_combined_mesh(opt, DEVICE, output_dir)
+    # TODO: Fix this as it currently crashes
+    #generate_combined_mesh(opt, DEVICE, output_dir)
     
     # Generate a mesh for each part
     generate_part_meshes(opt, DEVICE, output_dir)
