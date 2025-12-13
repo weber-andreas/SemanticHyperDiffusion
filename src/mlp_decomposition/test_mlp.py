@@ -8,31 +8,34 @@ import torch
 import configargparse
 from omegaconf import OmegaConf
 
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-sys.path.append(ROOT_DIR)
-sys.path.append("external/")
-sys.path.append("external/siren/")
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
 from external.siren import sdf_meshing, utils
 from src.mlp_decomposition.mlp_composite import get_model
 
 
 class SDFDecoder(torch.nn.Module):
-    def __init__(self, checkpoint_path, device, output_type="sdf", cfg=None):
+    def __init__(self, checkpoint_path, device, cfg, output_type="sdf"):
         super().__init__()
         self.model = get_model(cfg, output_type=output_type)
 
         if checkpoint_path is not None:
-            self.model.load_state_dict(torch.load(checkpoint_path))
+            self.model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        
         self.model.to(device)
+        self.device = device
 
     def forward(self, coords):
-        model_in = {"coords": coords}
-        return self.model(model_in)["model_out"]
+        # The meshing script provides a [N, 3] tensor. The model expects [B, N, 3].
+        model_in = {"coords": coords.unsqueeze(0)}
+        model_out = self.model(model_in)
+        return model_out["model_out"]
 
 
-def main():
-
+def parse_arguments():
+    """Parses command-line arguments."""
     p = configargparse.ArgumentParser()
     p.add(
         "-c",

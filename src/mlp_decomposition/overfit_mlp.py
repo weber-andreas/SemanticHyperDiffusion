@@ -73,9 +73,22 @@ def get_paths(cfg: DictConfig, file_id: str) -> Dict[str, str]:
         "logging_root": os.path.join(cfg.logging_root, cfg.exp_name),
     }
 
+def create_dataloader(cfg: DictConfig, paths: Dict[str, str]) -> Dict[str, DataLoader]:
+    """Creates a Semantic Dataloader, that returns labels as additional target"""
+    sdf_dataset = SemanticPointCloud(
+        on_surface_points=cfg.batch_size,
+        pointcloud_path=paths["pointcloud"],
+        pointcloud_expert_path=paths["expert"],
+        label_path=paths["label"],
+        output_type=cfg.output_type,
+        cfg=cfg,
+    )
+    return sdf_dataset
+
 
 def create_dataloaders(cfg: DictConfig, paths: Dict[str, str]) -> Dict[str, DataLoader]:
     """Creates a dictionary of DataLoaders, one for each part."""
+    #TODO: Remove if not needed
     sdf_dataset = SemanticPointCloud(
         on_surface_points=cfg.batch_size,
         pointcloud_path=paths["pointcloud"],
@@ -101,7 +114,8 @@ def get_loss_function(cfg: DictConfig) -> Any:
     """Selects the appropriate loss function based on config."""
     if cfg.output_type == "occ":
 
-        fn = loss.single_part_loss
+        #fn = loss.single_part_loss
+        fn = loss.all_part_loss
         # fn = (
         #     loss_functions.occ_tanh
         #     if cfg.out_act == "tanh"
@@ -133,20 +147,20 @@ def handle_bad_initialization(
     model.eval()
 
     with torch.no_grad():
-        for part_name, dataloader in dataloader.items():
-            try:
-                model_input, gt = next(iter(dataloader))
-                model_input = {k: v.to(DEVICE) for k, v in model_input.items()}
-                gt = {k: v.to(DEVICE) for k, v in gt.items()}
+        #for part_name, dataloader in dataloader.items():
+        try:
+            model_input, gt = next(iter(dataloader))
+            model_input = {k: v.to(DEVICE) for k, v in model_input.items()}
+            gt = {k: v.to(DEVICE) for k, v in gt.items()}
 
-                model_output = model(model_input, part_name=part_name)
-                loss = loss_fn(model_output, gt, model)
+            model_output = model(model_input)
+            loss = loss_fn(model_output, gt, model)
 
-                if loss.get("occupancy", 0) > 0.5:
-                    print(f"Outlier detected for part {part_name} based on loss:", loss)
-                    return True
-            except StopIteration:
-                pass
+            if loss.get("occupancy", 0) > 0.5:
+                print(f"Outlier detected based on loss:", loss)
+                return True
+        except StopIteration:
+            pass
 
     return False
 
@@ -178,7 +192,7 @@ def visualize_mesh(cfg: DictConfig, checkpoint_path: str, filename: str) -> None
     os.makedirs(output_dir, exist_ok=True)
 
     output_path = os.path.join(output_dir, filename)
-    sdf_decoder = SDFDecoder(checkpoint_path, device=DEVICE)
+    sdf_decoder = SDFDecoder(checkpoint_path, device=DEVICE, cfg=cfg)
     sdf_meshing.create_mesh(sdf_decoder, output_path, N=256, level=0, device=DEVICE)
 
 
@@ -213,7 +227,7 @@ def process_single_object(
         print(f"Label {paths['label']} not found. Skipping.")
         return None
 
-    dataloaders = create_dataloaders(cfg, paths)
+    dataloader = create_dataloader(cfg, paths)
 
     if cfg.strategy == "save_pc":
         print("Strategy 'save_pc': Skipping training for", paths["file_id"])
@@ -238,7 +252,7 @@ def process_single_object(
 
     # Handle Strategies (Remove Bad / Init)
     if cfg.strategy == "remove_bad":
-        is_bad = handle_bad_initialization(model, dataloaders, loss_fn, checkpoint_path)
+        is_bad = handle_bad_initialization(model, dataloader, loss_fn, checkpoint_path)
         if is_bad:
             return None
 
@@ -247,7 +261,7 @@ def process_single_object(
     # Training
     training.train(
         model=model,
-        train_dataloader=dataloaders,
+        train_dataloader=dataloader,
         epochs=cfg.epochs,
         lr=cfg.lr,
         steps_til_summary=cfg.steps_til_summary,

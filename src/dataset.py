@@ -556,10 +556,13 @@ class SemanticPointCloud(Dataset):
 
         output = {
             "coords": torch.from_numpy(coords).float(),
-            "semantic_label": torch.from_numpy(labels).long(),
+            #"semantic_label": torch.from_numpy(labels).long()
         }
-        target = {"sdf": torch.from_numpy(occs).float()}
-
+        #TODO: Compare sdf and labels occupancy values
+        # Then remove sdf from target and semantic_label output
+        target = {#"sdf": torch.from_numpy(occs).float(),
+                  "semantic_label": torch.from_numpy(labels).long()
+        }
         return output, target
 
 

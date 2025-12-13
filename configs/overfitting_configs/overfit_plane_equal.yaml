@@ -1,0 +1,63 @@
+input_type: "mesh"
+output_type: "occ" # or sdf or occ
+augment_on_the_fly: False
+mesh_jitter: False
+dataset_folder: "data/baseline/planes"
+dataset_expert_folder: "data/shapenetpart/PartAnnotation/02691156/points/"
+label_folder: "data/shapenetpart/PartAnnotation/02691156/expert_verified/points_label/"
+label_names: ["body", "wing", "tail", "engine"]
+common_file_ids: "data/common/plane_common_shapes.txt"
+wandb_dir: .
+batch_size: 2048
+lr: 1e-2
+model_type: mlp_3d
+bayesian: False
+logging_root: './logs'
+shape_modify: 'no'
+exp_name: "overfit_plane"
+steps_til_summary: 100
+epochs_til_ckpt: 1
+hidden_features: 128
+kl_weight: 0
+epochs: 5000
+scheduler:
+  type: adaptive
+  step_size: 30
+  gamma: 0.1
+  min_lr: 1e-5
+  patience: 50
+  patience_adaptive: 10
+  factor: 0.8
+  threshold: 0
+multi_process:
+  enabled: False
+  part_id: 0
+  n_of_parts: 4
+  first_weights_name:
+  ignore_first: False
+n_points: 100000
+is_meta: False #True
+strategy: first_weights
+clip_grad: False
+out_act: sigmoid
+logging: False
+mlp_config:
+  out_size: 1
+  use_leaky_relu: False
+  hidden_neurons: [128, 128, 128]
+  multires: 4
+  move: False
+# for semantic decomposition
+part_distribution:
+  body: 0.25
+  wing: 0.25
+  tail: 0.25
+  engine: 0.25
+part_mlp_config:
+  total_hidden_size: 240
+  input_size: 3
+  output_size: 1
+  num_layers: 3
+  multires: 4
+  use_leaky_relu: False
+  use_bias: True

@@ -69,87 +69,97 @@ def train(
     best_loss = float("inf")
     patience = cfg.scheduler.patience
     num_bad_epochs = 0
-
-    total_batches = sum(len(dl) for dl in train_dataloader.values())
-
-    with tqdm(total=total_batches * epochs) as pbar:
+    with tqdm(total=len(train_dataloader) * epochs) as pbar:
         train_losses = []
         for epoch in range(epochs):
 
             total_loss, total_items = 0, 0
+            part_loss_accumulators = {} 
 
-            # Iterate over each part's dataloader
-            for part_name, dataloader in train_dataloader.items():
-                for step, (model_input, gt) in enumerate(dataloader):
-                    start_time = time.time()
+            for step, (model_input, gt) in enumerate(train_dataloader):
+                # BUG: This enumerate does go on indefinetly without the following if
+                # TODO: Figure out why this is needed
+                if step >= len(train_dataloader):
+                    break
+                start_time = time.time()
 
+                model_input = {
+                    key: value.to(DEVICE) for key, value in model_input.items()
+                }
+                gt = {key: value.to(DEVICE) for key, value in gt.items()}
+
+                if double_precision:
                     model_input = {
-                        key: value.to(DEVICE) for key, value in model_input.items()
+                        key: value.double() for key, value in model_input.items()
                     }
-                    gt = {key: value.to(DEVICE) for key, value in gt.items()}
+                    gt = {key: value.double() for key, value in gt.items()}
 
-                    if double_precision:
-                        model_input = {
-                            key: value.double() for key, value in model_input.items()
-                        }
-                        gt = {key: value.double() for key, value in gt.items()}
-
-                    if use_lbfgs:
-
-                        def closure():
-                            optim.zero_grad()
-                            model_output = model(model_input, part_name=part_name)
-                            losses = loss_fn(model_output, gt)
-                            train_loss = 0.0
-                            for loss_name, loss in losses.items():
+                if use_lbfgs:
+                    def closure():
+                        optim.zero_grad()
+                        model_output = model(model_input)
+                        losses = loss_fn(model_output, gt)
+                        train_loss = 0.0
+                        for loss_name, loss in losses.items():
+                            if loss_name != "part_losses":
                                 train_loss += loss.mean()
-                            train_loss.backward()
-                            return train_loss
+                        train_loss.backward()
+                        return train_loss
 
-                        optim.step(closure)
+                    optim.step(closure)
 
-                    model_output = model(model_input, part_name=part_name)
-                    losses = loss_fn(model_output, gt, model)
+                model_output = model(model_input)
+                losses = loss_fn(model_output, gt, model)
 
-                    train_loss = 0.0
-                    for loss_name, loss in losses.items():
+                train_loss = 0.0
+                for loss_name, loss in losses.items():
+                    if loss_name != "part_losses":
+                        # This should be in loss function?
                         single_loss = loss.mean()
-
                         if loss_schedules is not None and loss_name in loss_schedules:
                             single_loss *= loss_schedules[loss_name](total_steps)
 
                         train_loss += single_loss
 
-                    train_losses.append(train_loss.item())
-                    total_loss += train_loss.item() * len(model_output)
-                    total_items += len(model_output)
+                train_losses.append(train_loss.item())
+                # Changed to be more universal
+                batch_size = len(model_input['coords'])
+                total_loss += train_loss.item() * batch_size                    
+                total_items += batch_size
 
-                    if not total_steps % steps_til_summary:
-                        pass
+                if "part_losses" in losses and isinstance(losses["part_losses"], dict):
+                    for p_name, p_loss in losses["part_losses"].items():
+                        if p_name not in part_loss_accumulators:
+                            part_loss_accumulators[p_name] = 0.0
+                        
+                        # Accumulate: loss_val * batch_size (matching total_loss logic)
+                        part_loss_accumulators[p_name] += p_loss.mean().item() * batch_size
 
-                    if not use_lbfgs:
-                        optim.zero_grad()
-                        train_loss.backward()
+                if not total_steps % steps_til_summary:
+                    pass
 
-                        if clip_grad:
-                            if isinstance(clip_grad, bool):
-                                torch.nn.utils.clip_grad_norm_(
-                                    model.parameters(), max_norm=1.0
-                                )
-                            else:
-                                torch.nn.utils.clip_grad_norm_(
-                                    model.parameters(), max_norm=clip_grad
-                                )
+                if not use_lbfgs:
+                    optim.zero_grad()
+                    train_loss.backward()
 
-                        optim.step()
+                    if clip_grad:
+                        if isinstance(clip_grad, bool):
+                            torch.nn.utils.clip_grad_norm_(
+                                model.parameters(), max_norm=1.0
+                            )
+                        else:
+                            torch.nn.utils.clip_grad_norm_(
+                                model.parameters(), max_norm=clip_grad
+                            )
 
-                    pbar.update(1)
-                    pbar.set_description(
-                        "Epoch %d, Part %s, Total loss %0.6f, iteration time %0.6f"
-                        % (epoch, part_name, train_loss.item(), time.time() - start_time)
-                    )
+                    optim.step()
 
-                    total_steps += 1
+                pbar.update(1)
+                pbar.set_description(
+                    "Epoch %d, Total loss %0.6f, iteration time %0.6f"
+                    % (epoch, train_loss.item(), time.time() - start_time)
+                )
+                total_steps += 1
 
             epoch_loss = total_loss / total_items
             if cfg.scheduler.type == "adaptive":
@@ -178,13 +188,16 @@ def train(
                     ),
                 )
 
-            wandb.log(
-                {
-                    "epoch_loss": epoch_loss,
-                    "lr": optim.param_groups[0]["lr"],
-                    "epoch": epoch,
-                }
-            )
+            log_data = {
+                "epoch_loss": epoch_loss,
+                "lr": optim.param_groups[0]["lr"],
+                "epoch": epoch,
+            }
+
+            for p_name, p_total_val in part_loss_accumulators.items():
+                log_data[f"part_loss_{p_name}"] = p_total_val / total_items
+
+            wandb.log(log_data)
 
             if num_bad_epochs == patience:
                 break
@@ -198,7 +211,13 @@ def train(
                 wandb,
                 total_steps,
             )
-        wandb.log({"total_train_loss": train_loss.item()})
+        final_log_data = {"total_train_loss": train_loss.item()}
+        if "part_losses" in losses and isinstance(losses["part_losses"], dict):
+            for p_name, p_loss in losses["part_losses"].items():
+                final_log_data[f"total_part_loss_{p_name}"] = p_loss.mean().item()
+        
+        wandb.log(final_log_data)
+
         if cfg.strategy != "continue":
             torch.save(
                 model.state_dict(),

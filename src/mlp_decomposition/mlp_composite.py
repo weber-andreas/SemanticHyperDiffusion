@@ -10,6 +10,57 @@ sys.path.append(ROOT_DIR)
 from src.mlp_models import MLP3D
 
 
+class MLPMoE(nn.Module):
+    def __init__(self, registry):
+        super().__init__()
+        self.parts = nn.ModuleDict()
+        self.registry = registry
+
+        for part_name, part_config in registry.items():
+            self.parts[part_name] = MLP3D(**part_config)
+
+    def forward(self, model_input):
+        #TODO: occ should be label
+        # During training, model_input is a dict with "coords" and "occ" keys
+        if isinstance(model_input, dict):
+            x_in = model_input["coords"]
+            expert_input = model_input
+        else:
+            x_in = model_input
+            expert_input = {"coords": model_input}
+    
+        # Always run all parts but choose max for inference and give all part outputs for training
+        # TODO: For now we loop but stacking the weights for vectorized training would be nice.
+        # Problem: This might be inefficient for heterogenous sizes (Block Diagonal?)
+        part_outputs = {}
+        expert_tensors = [] 
+        for part_name, part_expert in self.parts.items():
+            part_output = part_expert(expert_input)["model_out"]
+            part_outputs[part_name] = part_output
+            expert_tensors.append(part_output)
+        
+        #TODO: For optimization you could remove this while training
+        # But it could also be used for a global loss
+        max_occ = torch.stack(expert_tensors).max(dim=0).values
+        return {"model_in": x_in, "model_out": max_occ, "parts": part_outputs}
+    
+
+    def flatten(self):
+        flat_vector = torch.cat([part.flatten() for part in self.parts.values()])
+        return flat_vector
+
+    def unflatten(self, flat_vector):
+        for part in self.parts.values():
+            part.unflatten(flat_vector)
+
+    def num_trainable_parameters(self):
+        """
+        Calculates the total number of trainable parameters
+        across all sub-networks in the composite model.
+        """
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+
 class MLPComposite(nn.Module):
     def __init__(self, registry):
         super().__init__()
@@ -72,7 +123,7 @@ class MLPComposite(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
     
 
-def get_model(cfg, output_type="occ"):
+def get_model(cfg, model_type="moe", output_type="occ"):
     distribution = cfg.part_distribution
     part_mlp_config = cfg.part_mlp_config
 
@@ -100,11 +151,52 @@ def get_model(cfg, output_type="occ"):
             "multires": multires,
             "output_type": output_type,
         }
+    if model_type == "moe":
+        return MLPMoE(registry)
+    elif model_type == "composite":
+        return MLPComposite(registry)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
 
-    model = MLPComposite(registry)
-    return model
+
+def get_model_no_config(model_type="moe", output_type="occ"):
+    """
+    Mostly here for backwards compatability. Does not need a config but 
+    hardcoded values. It is currently used in jupyter notebooks.
+    """
+    #distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
+    distribution = {"body": 0.45, "wing": 0.33, "tail": 0.13, "engine": 0.09}
+    total_hidden_size = 212
+
+    registry = {}
+    for part_name in distribution.keys():
+        num_layers = 3
+        hidden_neurons_per_layer = int(total_hidden_size * distribution[part_name])
+        # ensure that the hidden neurons per layer
+        hidden_neurons_per_layer = max(8, hidden_neurons_per_layer)
+
+        registry[part_name] = {
+            "input_size": 3,
+            "hidden_neurons": [hidden_neurons_per_layer] * num_layers,
+            "out_size": 1,
+            "use_leaky_relu": False,
+            "use_bias": True,
+            "multires": 4,
+            "output_type": output_type,
+        }
+    if model_type == "moe":
+        return MLPMoE(registry)
+    elif model_type == "composite":
+        return MLPComposite(registry)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
 
 
 if __name__ == "__main__":
-    model = get_model()
+    model = get_model_no_config()
+    model_in = torch.zeros(3)
+    model_out_train = model.forward(model_in)
+    model_out_inf = model.forward({"coords": torch.zeros(3)})
     print(model)
+    print(f"model_in: {model_in}")
+    print(f"model_out: {model_out_inf}")
