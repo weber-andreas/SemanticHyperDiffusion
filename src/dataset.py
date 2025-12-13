@@ -404,7 +404,7 @@ class SemanticPointCloud(Dataset):
 
         self.coords = pointcloud[:, :3]
         self.occupancies = pointcloud[:, 3]
-        self.labels = labels
+        self.labels = labels * self.occupancies
 
     def get_part_specific_pointcloud_datasets(
         self,
