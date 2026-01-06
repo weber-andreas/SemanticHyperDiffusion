@@ -1,8 +1,8 @@
 {
-  "pylint.args": ["--rcfile=.pylintrc"],
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "ms-python.black-formatter",
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
+  "jupyter.notebookFileRoot": "${workspaceFolder}",
 }

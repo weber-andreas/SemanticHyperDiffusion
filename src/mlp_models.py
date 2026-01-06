@@ -85,9 +85,8 @@ class MLP3D(nn.Module):
         self.layers.append(nn.Linear(hidden_neurons[-1], out_size, bias=use_bias))
 
     def forward(self, model_input):
-        coords_org = model_input["coords"].clone().detach().requires_grad_(True)
-        x = coords_org
-        x = self.embedder.embed(x)
+        coords_org = model_input["coords"]
+        x = self.embedder.embed(coords_org)
         for i, layer in enumerate(self.layers[:-1]):
             x = layer(x)
             x = F.leaky_relu(x) if self.use_leaky_relu else F.relu(x)

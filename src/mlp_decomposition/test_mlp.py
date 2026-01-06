@@ -23,7 +23,7 @@ class SDFDecoder(torch.nn.Module):
 
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        
+
         self.model.to(device)
         self.device = device
 
@@ -108,7 +108,9 @@ def parse_arguments():
     else:
         cfg = None
 
-    sdf_decoder = SDFDecoder(opt.checkpoint_path, DEVICE, output_type=opt.output_type, cfg=cfg)
+    sdf_decoder = SDFDecoder(
+        opt.checkpoint_path, DEVICE, output_type=opt.output_type, cfg=cfg
+    )
     name = Path(opt.checkpoint_path).stem
     root_path = os.path.join(opt.logging_root, opt.experiment_name)
     utils.cond_mkdir(root_path)
@@ -146,5 +148,11 @@ def parse_arguments():
     )
 
 
+"""
+python src/mlp_decomposition/test_mlp.py  \
+--experiment_name overfitting_chair  \
+--checkpoint_path logs/overfit_chair/occ_10d5c2f88b60bbf5febad4f49b26ec52_model_final.pth \
+--config_filepath configs/overfitting_configs/overfit_chair_equal.yaml 
+"""
 if __name__ == "__main__":
-    main()
+    parse_arguments()
