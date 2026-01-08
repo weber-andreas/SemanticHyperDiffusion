@@ -53,7 +53,7 @@ class HyperDiffusion(pl.LightningModule):
         betas = torch.tensor(np.linspace(1e-4, 2e-2, timesteps))
         self.image_size = encoded_outs[:1].shape
 
-        # Initialize diffusion utiities
+        # Initialize diffusion utilities
         self.diff = GaussianDiffusion(
             betas=betas,
             model_mean_type=ModelMeanType[cfg.diff_config.params.model_mean_type],
@@ -211,7 +211,7 @@ class HyperDiffusion(pl.LightningModule):
         # Handle 3D/4D sample generation
         if self.method == "hyper_3d":
             # every X epochs generate samples
-            if self.current_epoch % 20 == 0:
+            if self.current_epoch != 0 and self.current_epoch % 100 == 0:
                 x_0s = (
                     self.diff.ddim_sample_loop(self.model, (4, *self.image_size[1:]))
                     .cpu()
@@ -396,8 +396,14 @@ class HyperDiffusion(pl.LightningModule):
             Config.config["dataset_dir"], Config.config["dataset"]
         )
         n_points = self.cfg.val.num_points
-        test_object_names = np.genfromtxt(
-            os.path.join(dataset_path, f"{split_type}_split.lst"), dtype="str"
+        split_suffix = (
+            Config.get("split_suffix") if Config.get("split_suffix") is not None else ""
+        )
+        test_object_names = np.atleast_1d(
+            np.genfromtxt(
+                os.path.join(dataset_path, f"{split_type}_split{split_suffix}.lst"),
+                dtype="str",
+            )
         )
         print(f"{split_type}_object_names.length", len(test_object_names))
         if split_type == "val" and self.cfg.val.num_samples is not None:
@@ -515,8 +521,14 @@ class HyperDiffusion(pl.LightningModule):
             Config.config["dataset_dir"],
             Config.config["dataset"] + f"_{self.cfg.val.num_points}_pc",
         )
-        test_object_names = np.genfromtxt(
-            os.path.join(dataset_path, f"{split_type}_split.lst"), dtype="str"
+        split_suffix = (
+            Config.get("split_suffix") if Config.get("split_suffix") is not None else ""
+        )
+        test_object_names = np.atleast_1d(
+            np.genfromtxt(
+                os.path.join(dataset_path, f"{split_type}_split{split_suffix}.lst"),
+                dtype="str",
+            )
         )
         print("test_object_names.length", len(test_object_names))
 

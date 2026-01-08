@@ -56,6 +56,7 @@ def main(cfg: DictConfig):
 
     wandb.init(
         project="hyperdiffusion",
+        name=Config.get("run_name"),
         dir=Config.config["tensorboard_log_dir"],
         settings=wandb.Settings(_disable_stats=False, _disable_meta=False),
         tags=[Config.get("mode")],
@@ -96,7 +97,7 @@ def main(cfg: DictConfig):
     val_split_path = os.path.join(dataset_path, f"val_split{split_suffix}.lst")
     test_split_path = os.path.join(dataset_path, f"test_split{split_suffix}.lst")
 
-    train_object_names = np.genfromtxt(train_split_path, dtype="str")
+    train_object_names = np.atleast_1d(np.genfromtxt(train_split_path, dtype="str"))
     if not cfg.mlp_config.params.move:
         train_object_names = set([str.split(".")[0] for str in train_object_names])
 
@@ -155,9 +156,9 @@ def main(cfg: DictConfig):
                 fmt="%s",
             )
 
-        val_object_names = np.genfromtxt(val_split_path, dtype="str")
+        val_object_names = np.atleast_1d(np.genfromtxt(val_split_path, dtype="str"))
         val_object_names = set([str.split(".")[0] for str in val_object_names])
-        test_object_names = np.genfromtxt(test_split_path, dtype="str")
+        test_object_names = np.atleast_1d(np.genfromtxt(test_split_path, dtype="str"))
         test_object_names = set([str.split(".")[0] for str in test_object_names])
 
         train_dt = WeightDataset(

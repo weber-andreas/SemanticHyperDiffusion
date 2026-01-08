@@ -3,7 +3,7 @@ import sys
 
 import torch.nn as nn
 import torch
-from torch.func import functional_call, stack_module_state, vmap
+from torch.func import functional_call, vmap
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(ROOT_DIR)
@@ -35,7 +35,6 @@ class MLPMoE(nn.Module):
         first_part_key = self.part_names[0]
         base_model = self.parts[first_part_key]
 
-        # Stack parameters: explicitly connect self.parts[i] to the stacked tensor
         params = {}
         for name, param in base_model.named_parameters():
             # Iterate through all experts and stack this specific parameter
@@ -44,7 +43,7 @@ class MLPMoE(nn.Module):
                 [self.parts[key].get_parameter(name) for key in self.part_names]
             )
 
-        # Stack buffers: (e.g., if your Embedder has fixed frequency bands)
+        # Stack buffers
         buffers = {}
         for name, buffer in base_model.named_buffers():
             buffers[name] = torch.stack(
@@ -53,15 +52,15 @@ class MLPMoE(nn.Module):
 
         # Vectorized Execution
         def compute_expert(p, b, data):
-            # functional_call applies the stacked weights 'p' to the 'base_model' architecture
+            # apply the stacked weights 'p' to the 'base_model' architecture
             out = functional_call(base_model, (p, b), args=(data,), kwargs=None)
             return out["model_out"]
 
-        # vmap: (Num_Experts, ...) -> (Num_Experts, Batch, Output)
+        # vmap output Num_Experts, Batch, Output
         expert_results = vmap(compute_expert, in_dims=(0, 0, None))(
             params, buffers, expert_input
         )
-
+        # Reconstruct part outputs dict
         part_outputs = {
             name: expert_results[i] for i, name in enumerate(self.part_names)
         }
@@ -71,12 +70,10 @@ class MLPMoE(nn.Module):
         return {"model_in": x_in, "model_out": max_occ, "parts": part_outputs}
 
     def flatten(self):
-        # Unchanged
         flat_vector = torch.cat([part.flatten() for part in self.parts.values()])
         return flat_vector
 
     def unflatten(self, flat_vector):
-        # Unchanged
         for part in self.parts.values():
             part.unflatten(flat_vector)
 

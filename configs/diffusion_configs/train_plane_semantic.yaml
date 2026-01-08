@@ -8,7 +8,7 @@ disable_wandb: False
 run_name: tiny_diffusion_plane_20
 dataset_dir: ./data/baseline
 dataset: 02691156
-split_suffix: 
+split_suffix: _400
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0
@@ -29,7 +29,7 @@ batch_size: 8
 accumulate_grad_batches: 4
 val:
   num_points: 2048
-  num_samples: 60
+  num_samples: 5
 mlp_config:
   params:
     model_type: mlp_3d

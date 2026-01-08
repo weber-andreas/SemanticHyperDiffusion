@@ -5,10 +5,10 @@ test_sample_mult: 1.1
 filter_bad: False
 filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
 disable_wandb: False
-run_name: tiny_diffusion_plane_20
+run_name: tiny_diffusion_plane_400
 dataset_dir: ./data/baseline
 dataset: 02691156
-split_suffix: 
+split_suffix: _400
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0
@@ -50,9 +50,9 @@ diff_config:
     loss_type: MSE
 transformer_config:
   params:
-    n_embd: 1024
+    n_embd: 512
     n_layer: 12
-    n_head: 32
+    n_head: 16
     split_policy: layer_by_layer
     use_global_residual: False
     condition: "no"
