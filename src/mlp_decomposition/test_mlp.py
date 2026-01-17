@@ -17,7 +17,7 @@ from src.mlp_decomposition.mlp_composite import get_model
 
 
 class SDFDecoder(torch.nn.Module):
-    def __init__(self, checkpoint_path, device, cfg, output_type="sdf"):
+    def __init__(self, checkpoint_path, device, cfg, output_type="occ"):
         super().__init__()
         self.model = get_model(cfg, output_type=output_type)
 
@@ -31,17 +31,17 @@ class SDFDecoder(torch.nn.Module):
         # The meshing script provides a [N, 3] tensor. The model expects [B, N, 3].
         model_in = {"coords": coords.unsqueeze(0)}
         model_out = self.model(model_in)
-        return model_out["model_out"]
+        return model_out["model_out"].squeeze(0)
+        #return model_out["parts"]
 
 
-def parse_arguments():
+def main():
     """Parses command-line arguments."""
     p = configargparse.ArgumentParser()
     p.add(
         "-c",
         "--config_filepath",
         required=False,
-        is_config_file=True,
         help="Path to config file.",
     )
     p.add_argument(
@@ -80,7 +80,7 @@ def parse_arguments():
     p.add_argument(
         "--resolution",
         type=int,
-        default=1600,
+        default=128,
     )
     p.add_argument(
         "--level",

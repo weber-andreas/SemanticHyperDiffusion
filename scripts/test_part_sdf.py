@@ -25,9 +25,9 @@ class SDFDecoder(torch.nn.Module):
     A wrapper class that makes the MLPComposite model compatible with the sdf_meshing script.
     It can be configured to output either the combined shape or a single part's shape.
     """
-    def __init__(self, checkpoint_path, device, output_type="occ", part_name=None):
+    def __init__(self, checkpoint_path, device, cfg, output_type="occ", part_name=None):
         super().__init__()
-        self.model = get_model(output_type=output_type)
+        self.model = get_model(cfg, output_type=output_type)
         
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -54,6 +54,7 @@ def parse_arguments():
     p.add_argument("--resolution", type=int, default=256, help="Resolution for the marching cubes algorithm.")
     p.add_argument("--level", type=float, default=0.0, help="Isosurface level (e.g., 0.0 for occupancy logits).")
     p.add_argument("--output_type", type=str, default="occ", help="Output type of the model (e.g., 'occ' or 'sdf').")
+    p.add_argument("--cfg", type=str, default="configs/overfitting_configs/overfit_plane.yaml", help="cfg")
 
     return p.parse_args()
 
@@ -80,6 +81,8 @@ def generate_combined_mesh(opt, device, output_dir):
 def generate_part_meshes(opt, device, output_dir):
     """Generates and saves a separate mesh for each individual part."""
     print("\n--- Generating meshes for INDIVIDUAL parts ---")
+    from omegaconf import OmegaConf
+    cfg = OmegaConf.load(opt.cfg)
 
     # Instantiate a temporary model to get the list of part names
     temp_model = get_model(output_type=opt.output_type)
@@ -90,7 +93,7 @@ def generate_part_meshes(opt, device, output_dir):
         print(f"Processing part: '{part_name}'...")
         
         # Create a new decoder instance that is locked to a specific part
-        part_decoder = SDFDecoder(opt.checkpoint_path, device, output_type=opt.output_type, part_name=part_name)
+        part_decoder = SDFDecoder(opt.checkpoint_path, device, cfg, output_type=opt.output_type, part_name=part_name)
         
         output_path = os.path.join(output_dir, f"{mesh_name_stem}_part_{part_name}")
         
