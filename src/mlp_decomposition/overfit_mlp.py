@@ -285,7 +285,7 @@ def process_single_object(
 @hydra.main(
     version_base=None,
     config_path="../../configs/overfitting_configs",
-    config_name="overfit_plane",
+    config_name="overfit_plane_equal",
 )
 def main(cfg: DictConfig):
     init_wandb(cfg)

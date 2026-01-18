@@ -21,7 +21,7 @@ from src.dataset_utils import (
 )
 
 
-def visualize_pointcloud_3d(point_cloud: np.ndarray, labels: list[str]) -> None:
+def visualize_pointcloud_3d(point_cloud: np.ndarray, labels) -> None:
     """Visualize point cloud data interactively using Plotly."""
     df = pd.DataFrame(
         data={
@@ -90,7 +90,7 @@ def visualize_single_pointcloud(
         visualize_pointcloud_3d(point_cloud, labels)
 
 
-def visualize_pointcloud_2d(point_cloud: np.ndarray, labels: list[str]) -> None:
+def visualize_pointcloud_2d(point_cloud: np.ndarray, labels) -> None:
     """Visualize point cloud data using Matplotlib in 2D."""
     if point_cloud.shape[1] < 2:
         raise ValueError("Input point cloud must have at least 2 dimensions.")
@@ -131,7 +131,7 @@ def visualize_pointcloud_2d(point_cloud: np.ndarray, labels: list[str]) -> None:
 
 
 def visualize_category_matrix(
-    categories: list[str],
+    categories,
     base_path: pathlib.Path,
     meta_data: dict,
     num_objects: int = 5,

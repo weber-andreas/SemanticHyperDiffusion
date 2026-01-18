@@ -26,7 +26,8 @@ from src.hd_utils import (
 )
 from external.siren import sdf_meshing
 from external.siren.dataio import anime_read
-from external.siren.experiment_scripts.test_sdf import SDFDecoder
+#from external.siren.experiment_scripts.test_sdf import SDFDecoder
+from src.mlp_decomposition.test_mlp import SDFDecoder
 
 
 class HyperDiffusion(pl.LightningModule):
@@ -112,11 +113,10 @@ class HyperDiffusion(pl.LightningModule):
             print(img.shape)
             mlp = generate_mlp_from_weights(img, self.mlp_kwargs)
             sdf_decoder = SDFDecoder(
-                self.mlp_kwargs.model_type,
-                None,
-                "nerf" if self.mlp_kwargs.model_type == "nerf" else "mlp",
-                self.mlp_kwargs,
+                checkpoint_path=None,
+                cfg=self.mlp_kwargs,
                 device=self.device,
+                output_type="occ"
             )
 
             mlp = mlp.to(self.device)
@@ -211,7 +211,7 @@ class HyperDiffusion(pl.LightningModule):
         # Handle 3D/4D sample generation
         if self.method == "hyper_3d":
             # every X epochs generate samples
-            if self.current_epoch % 20 == 0:
+            if self.current_epoch != 0 and self.current_epoch % 100 == 0:
                 x_0s = (
                     self.diff.ddim_sample_loop(self.model, (4, *self.image_size[1:]))
                     .cpu()
@@ -318,11 +318,10 @@ class HyperDiffusion(pl.LightningModule):
         for i, weights in enumerate(x_0s):
             mlp = generate_mlp_from_weights(weights, self.mlp_kwargs)
             sdf_decoder = SDFDecoder(
-                self.mlp_kwargs.model_type,
-                None,
-                "nerf" if self.mlp_kwargs.model_type == "nerf" else "mlp",
-                self.mlp_kwargs,
+                checkpoint_path=None,
+                cfg=self.mlp_kwargs,
                 device=self.device,
+                output_type=self.mlp_kwargs.output_type
             )
             sdf_decoder.model = mlp.to(self.device).eval()
             with torch.no_grad():

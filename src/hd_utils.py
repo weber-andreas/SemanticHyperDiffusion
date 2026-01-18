@@ -10,6 +10,9 @@ from external.Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_nor
 )
 from external.torchmetrics_fid import FrechetInceptionDistance
 
+from src.mlp_decomposition.mlp_composite import get_model
+import trimesh
+
 
 def calculate_fid_3d(
     sample_pcs,
@@ -68,6 +71,11 @@ def get_mlp(mlp_kwargs):
     if "model_type" in mlp_kwargs:
         if mlp_kwargs.model_type == "mlp_3d":
             mlp = MLP3D(**mlp_kwargs)
+        else:
+            mlp = get_model(mlp_kwargs, 
+                            model_type=mlp_kwargs.model_type, 
+                            output_type="occ"
+                            )
     else:
         mlp = MLP(**mlp_kwargs)
     return mlp
@@ -90,25 +98,33 @@ def generate_mlp_from_weights(weights, mlp_kwargs):
 
 
 def render_meshes(meshes):
-    print("Rendering %d meshes" % len(meshes))
     out_imgs = []
     for mesh in meshes:
-        img = render_mesh(mesh)
+        img, _ = render_mesh(mesh)
         out_imgs.append(img)
     return out_imgs
 
 
 def render_mesh(obj):
-    # Convert to pyrender mesh
-    mesh = pyrender.Mesh.from_trimesh(
-        obj,
-        material=pyrender.MetallicRoughnessMaterial(
-            alphaMode="BLEND",
-            baseColorFactor=[1, 0.3, 0.3, 1.0],
-            metallicFactor=0.2,
-            roughnessFactor=0.8,
-        ),
-    )
+    if isinstance(obj, trimesh.Trimesh):
+        # Handle mesh rendering
+        mesh = pyrender.Mesh.from_trimesh(
+            obj,
+            material=pyrender.MetallicRoughnessMaterial(
+                alphaMode="BLEND",
+                baseColorFactor=[1, 0.3, 0.3, 1.0],
+                metallicFactor=0.2,
+                roughnessFactor=0.8,
+            ),
+        )
+    else:
+        # Handle point cloud rendering, (converting it into a mesh instance)
+        pts = obj
+        sm = trimesh.creation.uv_sphere(radius=0.01)
+        sm.visual.vertex_colors = [1.0, 0.0, 0.0]
+        tfs = np.tile(np.eye(4), (len(pts), 1, 1))
+        tfs[:, :3, 3] = pts
+        mesh = pyrender.Mesh.from_trimesh(sm, poses=tfs)
 
     scene = pyrender.Scene()
     scene.add(mesh)
@@ -124,7 +140,8 @@ def render_mesh(obj):
     r = pyrender.OffscreenRenderer(800, 800)
     color, depth = r.render(scene)
     r.delete()
-    return color
+    return color, depth
+
 
 
 # Calculate look-at matrix for rendering

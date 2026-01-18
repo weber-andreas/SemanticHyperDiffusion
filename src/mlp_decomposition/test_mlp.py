@@ -14,22 +14,34 @@ if ROOT_DIR not in sys.path:
 
 from external.siren import sdf_meshing, utils
 from src.mlp_decomposition.mlp_composite import get_model
+from src.mlp_models import MLP3D
 
 
 class SDFDecoder(torch.nn.Module):
-    def __init__(self, checkpoint_path, device, cfg, output_type="sdf"):
+    def __init__(self, checkpoint_path, device, cfg, output_type="occ"):
         super().__init__()
-        self.model = get_model(cfg, output_type=output_type)
+        if cfg.model_type == "mlp_3d":
+            if "mlp_config" in cfg:
+                self.model = MLP3D(**cfg.mlp_config)
+            else:
+                self.model = MLP3D(**cfg)
+        else:
+            #Default to MoE model for now
+            self.model = get_model(cfg, output_type=output_type)
 
         if checkpoint_path is not None:
             self.model.load_state_dict(torch.load(checkpoint_path, map_location=device))
         
         self.model.to(device)
         self.device = device
+        self.model_type = cfg.model_type
 
     def forward(self, coords):
         # The meshing script provides a [N, 3] tensor. The model expects [B, N, 3].
-        model_in = {"coords": coords.unsqueeze(0)}
+        if self.model_type != "mlp_3d":
+            #Actually not sure if the if is needed but here for definite legacy compatability
+            coords = coords.unsqueeze(0)
+        model_in = {"coords": coords}
         model_out = self.model(model_in)
         return model_out["model_out"]
 

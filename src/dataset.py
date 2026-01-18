@@ -404,11 +404,11 @@ class SemanticPointCloud(Dataset):
 
         self.coords = pointcloud[:, :3]
         self.occupancies = pointcloud[:, 3]
-        self.labels = labels
+        self.labels = labels * self.occupancies
 
     def get_part_specific_pointcloud_datasets(
         self,
-    ) -> dict[str, PartSemanticPointCloud]:
+    ):
         part_pointclouds = {}
         for idx, part_name in enumerate(self.cfg.label_names):
             # Zero out rest of the object
@@ -476,7 +476,7 @@ class SemanticPointCloud(Dataset):
 
     def _calculate_occupancies(
         self, points: np.ndarray, obj: trimesh.Trimesh
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ):
         import igl
 
         inside_surface_values = igl.fast_winding_number_for_meshes(

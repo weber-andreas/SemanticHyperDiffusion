@@ -3,7 +3,7 @@ import logging
 import os
 import pathlib
 from glob import glob
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
 import natsort
@@ -23,7 +23,7 @@ def load_semantic_point_cloud(
     specific_index: Optional[int] = None,
     file_id: Optional[str] = None,
     expert_verified: Optional[bool] = False,
-) -> tuple[np.ndarray, list[str]]:
+):
     """Load point clouds and their labels from the dataset."""
 
     if (specific_index is None and file_id is None) or (
@@ -109,8 +109,8 @@ def load_semantic_point_cloud(
 
 
 def numeric_labels_to_str(
-    point_cloud_labels: dict[str, np.ndarray], label_names: list[str]
-) -> list[str]:
+    point_cloud_labels, label_names
+):
     num_point_labels_per_category = len(next(iter(point_cloud_labels.values())))
     point_cloud_label_map = ["none"] * num_point_labels_per_category
     for label in label_names:

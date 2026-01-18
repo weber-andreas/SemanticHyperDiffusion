@@ -1,0 +1,62 @@
+method: hyper_3d
+calculate_metric_on_test: True
+dedup: False
+test_sample_mult: 1.1
+filter_bad: False # Already excluded
+filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
+disable_wandb: False
+dataset_dir: ./data/baseline
+dataset: plane
+split_suffix:
+tensorboard_log_dir: .
+augment: False
+augment_amount: 0
+jitter_augment: False
+normalization_factor: 1
+timesteps: 500
+epochs: 6000
+scheduler: True
+scheduler_step: 200
+best_model_save_path:
+mode: train
+mlps_folder_train: ./logs/overfit_plane_new_loss #./mlp_weights/own_overfit
+model_resume_path:
+sampling: ddim
+val_fid_calculation_period: 100
+lr: 2e-4
+batch_size: 8
+accumulate_grad_batches: 4
+val:
+  num_points: 2048
+  num_samples: 60
+mlp_config:
+  params:
+    model_type: moe
+    move: False
+    output_type: "occ"
+    part_distribution:
+      body: 0.25
+      wing: 0.25
+      tail: 0.25
+      engine: 0.25
+    part_mlp_config:
+      total_hidden_size: 240
+      input_size: 3
+      output_size: 1
+      num_layers: 3
+      multires: 4
+      use_leaky_relu: False
+      use_bias: True
+diff_config:
+  params:
+    model_mean_type: START_X
+    model_var_type: FIXED_LARGE
+    loss_type: MSE
+transformer_config:
+  params:
+    n_embd: 512
+    n_layer: 12
+    n_head: 16
+    split_policy: layer_by_layer
+    use_global_residual: False
+    condition: "no"
