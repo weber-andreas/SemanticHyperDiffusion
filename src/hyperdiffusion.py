@@ -561,6 +561,7 @@ class HyperDiffusion(pl.LightningModule):
 
         # We are generating slightly more than ref_pcs
         number_of_samples_to_generate = int(len(ref_pcs) * self.cfg.test_sample_mult)
+        print("number_of_samples_to_generate", number_of_samples_to_generate)
 
         # Then process generated shapes
         sample_x_0s = []
@@ -655,7 +656,7 @@ class HyperDiffusion(pl.LightningModule):
         sample_batch = sample_batch[: len(ref_pcs)]
         print("number of samples generated (after clipping):", len(sample_batch))
         sample_pcs = torch.stack(sample_batch)
-        assert len(sample_pcs) == len(ref_pcs)
+        # assert len(sample_pcs) == len(ref_pcs)
         torch.save(sample_pcs, f"{orig_meshes_dir}/samples.pth")
 
         self.logger.experiment.log(

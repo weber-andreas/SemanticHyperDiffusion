@@ -149,9 +149,13 @@ def visualize_distribution(label_percentages, category, output_path):
 
     ax = sns.barplot(x=names, y=values, palette=bar_colors, hue=names, legend=False)
 
-    plt.title(f"Semantic Label Distribution - {category}", fontsize=16)
-    plt.xlabel("Part Name", fontsize=12)
-    plt.ylabel("Percentage (%)", fontsize=12)
+    # plt.title(f"Semantic Label Distribution - {category}", fontsize=16)
+
+    plt.xlabel("Part Name", fontsize=16)
+    plt.ylabel("Percentage (%)", fontsize=16)
+    # set label font size
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
     plt.ylim(0, 100)
 
     # Add percentage labels on top of bars
@@ -159,22 +163,30 @@ def visualize_distribution(label_percentages, category, output_path):
         ax.text(i, v + 1, f"{v:.1f}%", ha="center", va="bottom", fontsize=10)
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(output_path, bbox_inches="tight")
     print(f"Plot saved to {output_path}")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--category", type=str, default="Chair", choices=["Chair", "Airplane", "Car"])
+    parser.add_argument(
+        "--category", type=str, default="Chair", choices=["Chair", "Airplane", "Car"]
+    )
     args = parser.parse_args()
 
     CATEGORY = args.category
 
     paths, directory, label_names = get_paths_and_metadata(CATEGORY)
-    common_file_ids = get_common_files(paths, CATEGORY)
-    label_percentages = compute_distribution(
-        common_file_ids, paths, directory, label_names
-    )
+    # common_file_ids = get_common_files(paths, CATEGORY)
+    # label_percentages = compute_distribution(
+    #     common_file_ids, paths, directory, label_names
+    # )
+    label_percentages = {
+        "body": 0.5810623720271549,
+        "wing": 0.2707471832731944,
+        "tail": 0.07845535859842727,
+        "engine": 0.06973508610122342,
+    }
 
     print("\nLabel Distribution:")
     for label_name in label_names:
@@ -188,7 +200,7 @@ def main():
         json.dump(label_percentages, f)
 
     # Visualization
-    plot_path = f"data/common/{CATEGORY}_label_distribution.png"
+    plot_path = f"data/common/{CATEGORY}_label_distribution.svg"
     visualize_distribution(label_percentages, CATEGORY, plot_path)
 
 
