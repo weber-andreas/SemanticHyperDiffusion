@@ -8,6 +8,8 @@ import trimesh
 import numpy as np
 import pyrender
 from PIL import Image, ImageOps
+import re
+
 
 # Add the parent directory to path to import from src
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -178,23 +180,49 @@ def create_grid_image(image_paths, output_path, rows=2, cols=4):
     print(f"Grid saved to {output_path}")
 
 
-def render_and_grid(mesh_folder, output_folder, rows=2, cols=4):
+def render_and_grid(mesh_folder, output_folder, rows=2, cols=4, mesh_selection=None):
+    """
+    Render meshes and create a grid image.
+
+    Args:
+        mesh_folder: Path to folder containing mesh files
+        output_folder: Path to save renders
+        rows: Number of rows in grid
+        cols: Number of columns in grid
+        mesh_selection: Optional dictionary mapping row labels to lists of mesh names/indices.
+                       If None, automatically selects first rows*cols meshes.
+                       Example: {"Row 1": ["mesh_0.obj", "mesh_1.obj"], "Row 2": ["mesh_2.obj", "mesh_3.obj"]}
+    """
     os.makedirs(output_folder, exist_ok=True)
 
-    # 1. Get all files
-    all_files = sorted(glob.glob(os.path.join(mesh_folder, "*.obj")))
+    def extract_number(filename):
+        """Extract numeric value from filename for sorting."""
+        match = re.search(r"\d+", os.path.basename(filename))
+        return int(match.group()) if match else 0
+
+    all_files = sorted(
+        glob.glob(os.path.join(mesh_folder, "*.obj")), key=extract_number
+    )
     # Fallback to .ply if needed
     if not all_files:
-        all_files = sorted(glob.glob(os.path.join(mesh_folder, "*.ply")))
+        all_files = sorted(
+            glob.glob(os.path.join(mesh_folder, "*.ply")), key=extract_number
+        )
 
     print(f"Found {len(all_files)} files total.")
 
-    if len(all_files) < 8:
-        print("Warning: Found fewer than 8 files. Grid might look incomplete.")
+    # Use provided mesh selection or default to sequential grid
+    if mesh_selection is not None:
+        row_mapping = mesh_selection
+    else:
+        if len(all_files) < rows * cols:
+            print(
+                "Warning: Found fewer than expected files. Grid might look incomplete."
+            )
 
-    row_mapping = {
-        f"Row {i+1}": all_files[i * cols : (i + 1) * cols] for i in range(rows)
-    }
+        row_mapping = {
+            f"Row {i+1}": all_files[i * cols : (i + 1) * cols] for i in range(rows)
+        }
 
     final_list_for_grid = []
 
@@ -202,7 +230,27 @@ def render_and_grid(mesh_folder, output_folder, rows=2, cols=4):
         print(f"\nProcessing {label}...")
 
         row_images = []
-        for mesh_path in file_list:
+        for mesh_ref in file_list:
+            # Handle both file paths and filenames
+            if isinstance(mesh_ref, int):
+                # Integer index
+                mesh_path = all_files[mesh_ref]
+            elif os.path.isabs(mesh_ref):
+                # Absolute path
+                mesh_path = mesh_ref
+            else:
+                # Relative filename - search in folder
+                mesh_path = os.path.join(mesh_folder, mesh_ref)
+                if not os.path.exists(mesh_path):
+                    # Try all_files list
+                    matching = [f for f in all_files if os.path.basename(f) == mesh_ref]
+                    if matching:
+                        mesh_path = matching[0]
+
+            if not os.path.exists(mesh_path):
+                print(f"  Warning: {mesh_ref} not found, skipping...")
+                continue
+
             print(f"  Rendering {os.path.basename(mesh_path)}...")
             try:
                 mesh = trimesh.load(mesh_path)
@@ -221,19 +269,45 @@ def render_and_grid(mesh_folder, output_folder, rows=2, cols=4):
 
         final_list_for_grid.extend(row_images)
 
-        # Fill row with placeholders if fewer than 4 items found
+        # Fill row with placeholders if fewer items than cols
         while len(row_images) < cols:
             final_list_for_grid.append("empty_placeholder")
 
     # 3. Generate Final Grid
     if final_list_for_grid:
-        grid_out = os.path.join(output_folder, "final_shape_grid.png")
+        grid_out = os.path.join(output_folder, f"mesh_grid_{rows}x{cols}.png")
         create_grid_image(final_list_for_grid, grid_out, rows=rows, cols=cols)
 
 
 if __name__ == "__main__":
+    rows = 3
+    cols = 4
+
     # Adjust paths here
     mesh_folder = "gen_meshes/dummy-9q2wftm0"
     output_folder = "visualizations/rendered_meshes"
 
-    render_and_grid(mesh_folder, output_folder, rows=2, cols=5)
+    mesh_selection = {
+        "Row 1": [
+            "mesh_0.obj",
+            "mesh_1.obj",
+            "mesh_2.obj",
+            "mesh_3.obj",
+        ],
+        "Row 2": [
+            "mesh_4.obj",
+            "mesh_5.obj",
+            "mesh_12.obj",  # "mesh_6.obj",
+            "mesh_7.obj",
+        ],
+        "Row 3": [
+            "mesh_8.obj",
+            "mesh_9.obj",
+            "mesh_10.obj",
+            "mesh_11.obj",
+        ],
+    }
+
+    render_and_grid(
+        mesh_folder, output_folder, rows=rows, cols=cols, mesh_selection=mesh_selection
+    )
