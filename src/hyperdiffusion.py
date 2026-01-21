@@ -262,6 +262,13 @@ class HyperDiffusion(pl.LightningModule):
                     self.logger.log_image(
                         "generated_renders", out_imgs, step=self.current_epoch
                     )
+
+                    if not os.path.exists(f"gen_meshes/{wandb.run.name}"):
+                        os.makedirs(f"gen_meshes/{wandb.run.name}")
+
+                    meshes[0].export(
+                        f"gen_meshes/{wandb.run.name}/mesh_epoch_{self.current_epoch}.obj"
+                    )
         # Handle Voxel baseline sample generation
         elif self.method == "raw_3d":
             if self.current_epoch % 5 == 0:
@@ -664,10 +671,20 @@ class HyperDiffusion(pl.LightningModule):
         )
         print("Starting metric computation for", split_type)
 
-        fid = calculate_fid_3d(
-            sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
-        )
-        metrics = compute_all_metrics(
+        metrics = {}
+        # FID requires at least 2 samples to compute covariance
+        if len(sample_pcs) >= 2 and len(ref_pcs) >= 2:
+            fid = calculate_fid_3d(
+                sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
+            )
+            metrics["fid"] = fid.item()
+        else:
+            print(
+                f"Skipping FID calculation: need at least 2 samples (got {len(sample_pcs)})"
+            )
+            metrics["fid"] = float("nan")
+
+        compute_all_metrics(
             sample_pcs.to(self.device),
             ref_pcs.to(self.device),
             16 if split_type == "test" else 16,

@@ -4,11 +4,11 @@ dedup: False
 test_sample_mult: 1.1
 filter_bad: False
 filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
-disable_wandb: False
-run_name: tiny_diffusion_plane_400_filtered
+disable_wandb: True
+run_name: tiny_diffusion_plane_1
 dataset_dir: ./data/baseline
 dataset: 02691156
-split_suffix: _400_filtered
+split_suffix: _1
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0

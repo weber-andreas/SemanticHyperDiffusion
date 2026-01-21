@@ -180,7 +180,9 @@ def create_grid_image(image_paths, output_path, rows=2, cols=4):
     print(f"Grid saved to {output_path}")
 
 
-def render_and_grid(mesh_folder, output_folder, rows=2, cols=4, mesh_selection=None):
+def render_and_grid(
+    mesh_folder, output_folder, rows=2, cols=4, mesh_selection=None, create_grid=True
+):
     """
     Render meshes and create a grid image.
 
@@ -192,6 +194,7 @@ def render_and_grid(mesh_folder, output_folder, rows=2, cols=4, mesh_selection=N
         mesh_selection: Optional dictionary mapping row labels to lists of mesh names/indices.
                        If None, automatically selects first rows*cols meshes.
                        Example: {"Row 1": ["mesh_0.obj", "mesh_1.obj"], "Row 2": ["mesh_2.obj", "mesh_3.obj"]}
+        create_grid: If True, creates a combined grid image. If False, only renders individual meshes.
     """
     os.makedirs(output_folder, exist_ok=True)
 
@@ -223,7 +226,6 @@ def render_and_grid(mesh_folder, output_folder, rows=2, cols=4, mesh_selection=N
         row_mapping = {
             f"Row {i+1}": all_files[i * cols : (i + 1) * cols] for i in range(rows)
         }
-
     final_list_for_grid = []
 
     for label, file_list in row_mapping.items():
@@ -235,6 +237,9 @@ def render_and_grid(mesh_folder, output_folder, rows=2, cols=4, mesh_selection=N
             if isinstance(mesh_ref, int):
                 # Integer index
                 mesh_path = all_files[mesh_ref]
+            elif os.path.exists(mesh_ref):
+                # Path already valid (from all_files)
+                mesh_path = mesh_ref
             elif os.path.isabs(mesh_ref):
                 # Absolute path
                 mesh_path = mesh_ref
@@ -273,41 +278,53 @@ def render_and_grid(mesh_folder, output_folder, rows=2, cols=4, mesh_selection=N
         while len(row_images) < cols:
             final_list_for_grid.append("empty_placeholder")
 
-    # 3. Generate Final Grid
-    if final_list_for_grid:
+    # 3. Generate Final Grid (optional)
+    if create_grid and final_list_for_grid:
         grid_out = os.path.join(output_folder, f"mesh_grid_{rows}x{cols}.png")
         create_grid_image(final_list_for_grid, grid_out, rows=rows, cols=cols)
+    elif not create_grid:
+        print(
+            f"\nRendered {len([p for p in final_list_for_grid if p != 'empty_placeholder'])} meshes without creating grid."
+        )
 
 
 if __name__ == "__main__":
-    rows = 3
+    rows = 5
     cols = 4
 
     # Adjust paths here
-    mesh_folder = "gen_meshes/dummy-9q2wftm0"
+    mesh_folder = "gen_meshes/dummy-4o84sheu"
     output_folder = "visualizations/rendered_meshes"
 
-    mesh_selection = {
-        "Row 1": [
-            "mesh_0.obj",
-            "mesh_1.obj",
-            "mesh_2.obj",
-            "mesh_3.obj",
-        ],
-        "Row 2": [
-            "mesh_4.obj",
-            "mesh_5.obj",
-            "mesh_12.obj",  # "mesh_6.obj",
-            "mesh_7.obj",
-        ],
-        "Row 3": [
-            "mesh_8.obj",
-            "mesh_9.obj",
-            "mesh_10.obj",
-            "mesh_11.obj",
-        ],
-    }
+    # Option 1: Render with grid (default)
+    render_and_grid(mesh_folder, output_folder, rows=rows, cols=cols, create_grid=False)
 
-    render_and_grid(
-        mesh_folder, output_folder, rows=rows, cols=cols, mesh_selection=mesh_selection
-    )
+    # Option 2: Render without grid (only individual images)
+    # render_and_grid(mesh_folder, output_folder, rows=rows, cols=cols, create_grid=False)
+
+    # Option 3: Custom mesh selection with grid
+
+    # mesh_selection = {
+    #     "Row 1": [
+    #         "mesh_0.obj",
+    #         "mesh_1.obj",
+    #         "mesh_2.obj",
+    #         "mesh_3.obj",
+    #     ],
+    #     "Row 2": [
+    #         "mesh_4.obj",
+    #         "mesh_5.obj",
+    #         "mesh_12.obj",  # "mesh_6.obj",
+    #         "mesh_7.obj",
+    #     ],
+    #     "Row 3": [
+    #         "mesh_8.obj",
+    #         "mesh_9.obj",
+    #         "mesh_10.obj",
+    #         "mesh_11.obj",
+    #     ],
+    # }
+
+    # render_and_grid(
+    #     mesh_folder, output_folder, rows=rows, cols=cols, mesh_selection=mesh_selection
+    # )

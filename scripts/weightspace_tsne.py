@@ -140,7 +140,7 @@ def _visualize_similar_parts_as_pointclouds(
     fig, axes = plt.subplots(
         num_clusters,
         num_samples,
-        figsize=(3 * num_samples, 1.5 * num_clusters),
+        figsize=(1.5 * num_samples, 1.0 * num_clusters),
         squeeze=False,
     )
 
@@ -231,8 +231,7 @@ def _visualize_similar_parts_as_pointclouds(
             0.02,
             y_center,
             f"Cluster {cluster_id}",
-            fontsize=12,
-            fontweight="bold",
+            fontsize=10,
             rotation=90,
             va="center",
             ha="center",
