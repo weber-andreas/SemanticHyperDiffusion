@@ -10,7 +10,7 @@ common_file_ids: "data/common/plane_common_shapes.txt"
 wandb_dir: .
 batch_size: 2048
 lr: 1e-2
-model_type: mlp_3d
+model_type: moe_3d #mlp_3d
 bayesian: False
 logging_root: './logs'
 shape_modify: 'no'

@@ -34,7 +34,7 @@ DEVICE = torch.device(
 # Setting PYOPENGL_PLATFORM based on device
 if DEVICE.type == "cuda":
     os.environ["PYOPENGL_PLATFORM"] = "egl"
-    #os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+    # os.environ["PYOPENGL_PLATFORM"] = "osmesa"
     accelerator = "gpu"
 elif DEVICE.type == "mps":
     accelerator = "cpu"
@@ -104,8 +104,9 @@ def main(cfg: DictConfig):
 
     # Check if dataset folder already has train,test,val split; create otherwise.
     if method == "hyper_3d":
+        mlps_dataset_path = Config.get("mlps_folder_train")
         all_object_names = np.array(
-            [obj for obj in os.listdir(dataset_path) if ".lst" not in obj]
+            [obj for obj in os.listdir(mlps_dataset_path) if ".lst" not in obj]
         )
         total_size = len(all_object_names)
         val_size = int(total_size * 0.05)

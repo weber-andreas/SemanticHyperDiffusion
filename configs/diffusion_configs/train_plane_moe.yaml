@@ -1,13 +1,13 @@
 method: hyper_3d
-calculate_metric_on_test: True
+calculate_metric_on_test: False
 dedup: False
 test_sample_mult: 1.1
 filter_bad: False # Already excluded
 filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
-disable_wandb: False
+disable_wandb: True
 dataset_dir: ./data/baseline
-dataset: plane
-split_suffix:
+dataset: 02691156
+split_suffix: _960
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0
