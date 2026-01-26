@@ -75,7 +75,12 @@ def clean_mesh(mesh):
     return trimesh.util.concatenate(kept_components)
 
 
-def render_mesh_with_ground(mesh, color=[0.08, 0.15, 0.45, 1.0], skip_cleanup=False):
+def render_mesh_with_ground(
+    mesh,
+    color=[0.08, 0.15, 0.45, 1.0],
+    skip_cleanup=False,
+    scale_multiplier=1.0,
+):
     """
     Render with a top-down light to force shadows directly underneath.
     Auto-scales mesh to ensure consistent size.
@@ -84,6 +89,7 @@ def render_mesh_with_ground(mesh, color=[0.08, 0.15, 0.45, 1.0], skip_cleanup=Fa
         mesh: trimesh object to render
         color: RGBA color for the mesh
         skip_cleanup: if True, skip the mesh cleaning step (useful for neural implicit meshes)
+        scale_multiplier: additional scale factor applied after normalization (e.g., 0.7 to shrink)
     """
     # 0. CLEANUP: Remove outliers (Keep only main object)
     if skip_cleanup:
@@ -99,10 +105,10 @@ def render_mesh_with_ground(mesh, color=[0.08, 0.15, 0.45, 1.0], skip_cleanup=Fa
     mesh_copy.vertices -= mesh_copy.bounds.mean(axis=0)
 
     # 2. NORMALIZE SCALE
-    # Scale the mesh so its longest side is exactly 2.0 units.
+    # Scale the mesh so its longest side is exactly 2.0 units, then apply user multiplier.
     max_extent = np.max(mesh_copy.extents)
     if max_extent > 0:
-        scale_factor = 2.25 / max_extent
+        scale_factor = (2.25 / max_extent) * scale_multiplier
         mesh_copy.apply_scale(scale_factor)
 
     # 3. Re-Center and Floor Align after scaling

@@ -96,10 +96,12 @@ def mesh_from_model(model, output_dir, resolution=256, name="mesh"):
     return mesh_file
 
 
-def render_and_save_mesh(mesh_path, output_path):
+def render_and_save_mesh(mesh_path, output_path, render_scale=1.0):
     """Load a mesh, render it, and save as an image."""
     mesh = trimesh.load(mesh_path)
-    rendered_img = render_mesh_with_ground(mesh, skip_cleanup=False)
+    rendered_img = render_mesh_with_ground(
+        mesh, skip_cleanup=False, scale_multiplier=render_scale
+    )
     rendered_img.save(output_path)
     print(f"  Saved render to {output_path}")
     return rendered_img
@@ -252,6 +254,7 @@ def render_part_interpolation(
     alpha=0.2,
     resolution=256,
     output_type="occ",
+    render_scale=1.0,
 ):
     """Render two MLPs and their interpolated version with a specific part interpolated."""
     # Load config
@@ -353,16 +356,21 @@ def render_part_interpolation(
 
     # Render meshes
     img1 = render_and_save_mesh(
-        mesh_path1, os.path.join(output_dir, f"{name1}_render.png")
+        mesh_path1,
+        os.path.join(output_dir, f"{name1}_render.png"),
+        render_scale=render_scale,
     )
     img2 = render_and_save_mesh(
-        mesh_path2, os.path.join(output_dir, f"{name2}_render.png")
+        mesh_path2,
+        os.path.join(output_dir, f"{name2}_render.png"),
+        render_scale=render_scale,
     )
     img_interp = render_and_save_mesh(
         mesh_path_interp,
         os.path.join(
             output_dir, f"interpolated_{part_name}_alpha{alpha:.2f}_render.png"
         ),
+        render_scale=render_scale,
     )
 
     # Create side-by-side comparison
@@ -444,6 +452,13 @@ def parse_arguments():
         help="Output type of the MLP model.",
     )
 
+    p.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="Additional scale multiplier applied during rendering (e.g., 0.7 to shrink).",
+    )
+
     return p.parse_args()
 
 
@@ -472,13 +487,18 @@ def main():
         alpha=args.alpha,
         resolution=args.resolution,
         output_type=args.output_type,
+        render_scale=args.scale,
     )
 
 
+if __name__ == "__main__":
+    main()
+
+# Plane
 """
 python scripts/render_part_interpolation.py \
-  --checkpoint_path1 mlp_weights/overfit_plane_new_loss/occ_146533404a778665c93b40751084c22_model_final.pth \
-  --checkpoint_path2 mlp_weights/overfit_plane_new_loss/occ_12e127c0416f94ca4c3a35cee92bb95b_model_final.pth \
+  --checkpoint_path1 mlp_weights/overfit_plane_new_loss/occ_2af93e42ceca0ff7efe7c6556ea140b4_model_final.pth \
+  --checkpoint_path2 mlp_weights/overfit_plane_new_loss/occ_1d7eb22189100710ca8607f540cc62ba_model_final.pth \
   --mlp_config configs/overfitting_configs/overfit_plane_equal.yaml \
   --part_name body \
   --alpha 0.1 \
@@ -486,5 +506,16 @@ python scripts/render_part_interpolation.py \
   --output_dir visualizations/part_interpolation/03/body_interpolation
   """
 
-if __name__ == "__main__":
-    main()
+
+# Chair
+"""
+python scripts/render_part_interpolation.py \
+  --checkpoint_path1 logs/overfit_chair_vmap/occ_1b5fc54e45c8768490ad276cd2af3a4_model_final.pth\
+  --checkpoint_path2 logs/overfit_chair_vmap/occ_19cbb7fd3ba9324489a921f93b6641da_model_final.pth \
+  --mlp_config configs/overfitting_configs/overfit_chair_equal.yaml \
+  --scale 0.7 \
+  --part_name seat \
+  --alpha 0.2 \
+  --resolution 256 \
+  --output_dir visualizations/part_interpolation/chair/02/seat
+  """
