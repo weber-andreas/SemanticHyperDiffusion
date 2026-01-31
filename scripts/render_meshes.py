@@ -381,24 +381,27 @@ if __name__ == "__main__":
     mesh_folder = "gen_meshes/semanticHD_filtered"
     output_folder = "visualizations/rendered_meshes/semantic_hd_plane"
 
-    specific_meshes = [
-        "mesh_0.obj",
-        "mesh_1.obj",
-        "mesh_2.obj",
-        "mesh_3.obj",
-        "mesh_12.obj",
-        "mesh_5.obj",
+    hyperdiff_specific_meshes = [
         "mesh_6.obj",
         "mesh_7.obj",
-        "mesh_13.obj",
-        "mesh_9.obj",
         "mesh_10.obj",
+        "mesh_11.obj",
+        "mesh_epoch_5800.obj",
+        "mesh_13.obj",
+    ]
+
+    semantic_hd_meshes = [
+        "mesh_0.obj",
+        "mesh_1.obj",
+        "mesh_3.obj",
+        "mesh_7.obj",
+        "mesh_9.obj",
         "mesh_11.obj",
     ]
 
-    images = render_meshes(mesh_folder, output_folder, mesh_list=specific_meshes)
-    rows = 3
-    cols = 4
+    images = render_meshes(mesh_folder, output_folder, mesh_list=semantic_hd_meshes)
+    rows = 1
+    cols = len(images) // rows
 
     create_grid(
         images,
