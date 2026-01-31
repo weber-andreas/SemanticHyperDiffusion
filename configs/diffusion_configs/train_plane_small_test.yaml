@@ -1,14 +1,14 @@
 method: hyper_3d
-calculate_metric_on_test: False
+calculate_metric_on_test: True
 dedup: False
 test_sample_mult: 1.1
 filter_bad: False
 filter_bad_path: ./data/baseline/plane_problematic_shapes.txt
-disable_wandb: True
-run_name: tiny_diffusion_plane_400_v2_resume_mode_test
+disable_wandb: False
+run_name: hyperdiffusion_plane_758embed_continue
 dataset_dir: ./data/baseline
 dataset: 02691156
-split_suffix:  
+split_suffix: 
 tensorboard_log_dir: .
 augment: False
 augment_amount: 0
@@ -19,9 +19,9 @@ epochs: 6000
 scheduler: True
 scheduler_step: 200
 best_model_save_path:
-mode:  train # train
+mode: train
 mlps_folder_train: ./mlp_weights/3d_128_plane_multires_4_manifoldplus_slower_no_clipgrad
-model_resume_path: ./lightning_checkpoints/2026-01-12 17-13-42.759461-tiny_diffusion_plane_400_filtered-utlueet3/last-epoch=5999-train_loss=0.00-val_fid=0.00.ckpt
+model_resume_path: ./lightning_checkpoints/2026-01-26 16-19-12.937632-hyperdiffusion_plane_768embed/best-val-mmd-epoch=5599-train_loss=0.00-val_fid=0.00.ckpt
 sampling: ddim
 val_fid_calculation_period: 100
 lr: 2e-4
@@ -50,7 +50,7 @@ diff_config:
     loss_type: MSE
 transformer_config:
   params:
-    n_embd: 512
+    n_embd: 768
     n_layer: 12
     n_head: 16
     split_policy: layer_by_layer

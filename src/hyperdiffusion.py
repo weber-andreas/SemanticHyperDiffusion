@@ -201,6 +201,7 @@ class HyperDiffusion(pl.LightningModule):
         for metric_name in metrics:
             self.log("train/" + metric_name, metrics[metric_name])
         metrics = metric_fn("val")
+        print("Validation metrics:", metrics)
         for metric_name in metrics:
             self.log("val/" + metric_name, metrics[metric_name])
 
@@ -263,8 +264,7 @@ class HyperDiffusion(pl.LightningModule):
                         "generated_renders", out_imgs, step=self.current_epoch
                     )
 
-                    if not os.path.exists(f"gen_meshes/{wandb.run.name}"):
-                        os.makedirs(f"gen_meshes/{wandb.run.name}")
+                    os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
 
                     meshes[0].export(
                         f"gen_meshes/{wandb.run.name}/mesh_epoch_{self.current_epoch}.obj"
@@ -671,7 +671,12 @@ class HyperDiffusion(pl.LightningModule):
         )
         print("Starting metric computation for", split_type)
 
-        metrics = {}
+        metrics = compute_all_metrics(
+            sample_pcs.to(self.device),
+            ref_pcs.to(self.device),
+            16 if split_type == "test" else 16,
+            self.logger,
+        )
         # FID requires at least 2 samples to compute covariance
         if len(sample_pcs) >= 2 and len(ref_pcs) >= 2:
             fid = calculate_fid_3d(
@@ -683,14 +688,6 @@ class HyperDiffusion(pl.LightningModule):
                 f"Skipping FID calculation: need at least 2 samples (got {len(sample_pcs)})"
             )
             metrics["fid"] = float("nan")
-
-        compute_all_metrics(
-            sample_pcs.to(self.device),
-            ref_pcs.to(self.device),
-            16 if split_type == "test" else 16,
-            self.logger,
-        )
-        metrics["fid"] = fid.item()
 
         print("Completed metric computation for", split_type)
 
@@ -722,7 +719,7 @@ class HyperDiffusion(pl.LightningModule):
             #     x_0s.mean().item(),
             #     x_0s.std().item(),
             # )
-            os.makedirs(f"gen_meshes/{wandb.run.name}")
+            os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
 
             if self.cfg.mlp_config.params.move:
                 rot_matrix = Rotation.from_euler("zyx", [45, 180, 90], degrees=True)
@@ -803,7 +800,7 @@ class HyperDiffusion(pl.LightningModule):
             # Handle 4D generation
             if self.cfg.mlp_config.params.move:
                 rot_matrix = Rotation.from_euler("zyx", [45, 180, 90], degrees=True)
-                os.makedirs(f"gen_meshes/{wandb.run.name}")
+                os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
 
                 for sample_i, x_0 in enumerate(tqdm(x_0s)):
                     out_imgs = []
@@ -833,7 +830,7 @@ class HyperDiffusion(pl.LightningModule):
             # Handle 3D generation
             else:
                 out_imgs = []
-                os.makedirs(f"gen_meshes/{wandb.run.name}")
+                os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
                 for x_0 in tqdm(x_0s):
                     mesh, _ = self.generate_meshes(x_0.unsqueeze(0), None, res=700)
                     mesh = mesh[0]
