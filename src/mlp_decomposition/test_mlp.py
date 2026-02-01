@@ -18,7 +18,7 @@ from src.mlp_models import MLP3D
 
 
 class SDFDecoder(torch.nn.Module):
-    def __init__(self, checkpoint_path, device, cfg, output_type="occ"):
+    def __init__(self, checkpoint_path, device, cfg, output_type="occ", part="all"):
         super().__init__()
         if cfg.model_type == "mlp_3d":
             if "mlp_config" in cfg:
@@ -37,15 +37,21 @@ class SDFDecoder(torch.nn.Module):
         self.model.to(device)
         self.device = device
         self.model_type = cfg.model_type
+        self.part = part
 
     def forward(self, coords):
         # The meshing script provides a [N, 3] tensor. The model expects [B, N, 3].
         if self.model_type != "mlp_3d":
             # Actually not sure if the if is needed but here for definite legacy compatability
             coords = coords.unsqueeze(0)
+
         model_in = {"coords": coords}
         model_out = self.model(model_in)
-        return model_out["model_out"]
+        if self.part != "all":
+            out = model_out["parts"][self.part]
+        else:
+            out = model_out["model_out"]
+        return out
 
 
 def parse_arguments():
