@@ -431,7 +431,7 @@ class SemanticPointCloud(Dataset):
         pointcloud_coords = pointcloud[:, :3]
         # find nearest neighbor for each point in pointcloud
         distances, indices = nn_matcher.kneighbors(pointcloud_coords, return_distance=True)
-        print(f" alignment error ({np.max(distances)}).")
+        #print(f" alignment error ({np.max(distances)}).")
         closest_expert_indices = indices.flatten()
         matched_labels = labels[closest_expert_indices]
         return matched_labels

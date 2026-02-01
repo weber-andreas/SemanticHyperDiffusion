@@ -78,10 +78,13 @@ def evaluate_shape(model, shape_id, cfg, labels_map):
 def main(cfg: DictConfig):
     
     # Based on total loss
-    default_threshold = 50.0
+    default_threshold = 40.0
+    default_weights = "mlp_weights/overfit_plane"
     
+    # Use Hydra config options to overwrite these defaults
+    # I.e +outlier_threshold=30
     threshold = getattr(cfg, 'outlier_threshold', default_threshold) 
-    weights_dir = getattr(cfg, 'weights_dir', 'mlp_weights/overfit_plane')
+    weights_dir = getattr(cfg, 'weights_dir', default_weights)
     output_file = getattr(cfg, 'output_file', 'problematic_shapes_filtered.txt')
 
     logger.info(f"--- Outlier Filtering (Summed Loss) ---")
@@ -110,6 +113,7 @@ def main(cfg: DictConfig):
     outliers = []
     all_losses = [] # Store losses for histogramm
     
+    #weight_files = weight_files[:20]
     logger.info(f"Scanning {len(weight_files)} shapes...")
     
     pbar = tqdm(weight_files)
@@ -156,22 +160,49 @@ def main(cfg: DictConfig):
             f.write(f"{oid}\n")
     logger.info(f"Outlier IDs saved to {output_file}")
 
-    # Histogram plotting
+    # --- Scientific Poster Plotting ---
     if all_losses:
-        plt.figure(figsize=(10, 6))
-        plt.hist(all_losses, bins=50, color='skyblue', edgecolor='black', alpha=0.7, log=False)
-        plt.axvline(threshold, color='red', linestyle='dashed', linewidth=2, label=f'Cutoff Threshold: {threshold}')
+        import matplotlib.pyplot as plt
         
-        plt.title(f"Distribution of Reconstruction Errors per Semantic Part (N={len(all_losses)})")
-        plt.xlabel("Summed BCE Loss")
-        plt.ylabel("Frequency)")
-        plt.legend()
-        plt.grid(axis='y', alpha=0.5)
+        # 1. Setup specific params for Poster Quality (Large Fonts)
+        plt.rcParams.update({
+            'font.size': 24,         
+            'axes.titlesize': 32,     
+            'axes.labelsize': 26,     
+            'xtick.labelsize': 22,   
+            'ytick.labelsize': 22,
+            'legend.fontsize': 24,    
+            'figure.titlesize': 34,
+            'font.family': 'sans-serif' 
+        })
+
+        fig, ax = plt.subplots(figsize=(20, 5))
+        
+
+        ax.hist(all_losses, bins=50, color='#3B75AF', edgecolor='white', 
+                linewidth=0.8, alpha=0.85, label='Part Loss Distribution', zorder=3)
+        
+        ax.axvline(threshold, color='#D62728', linestyle='--', linewidth=4, 
+                   label=f'Cutoff Threshold: {threshold}')
+        
+        ax.set_title(f"Distribution of Reconstruction Errors per Semantic Part\n(N={len(all_losses)})", fontweight='bold', pad=20)
+        ax.set_xlabel("Summed BCE Loss", labelpad=15)
+        ax.set_ylabel("Frequency", labelpad=15)
+        
+        ax.grid(axis='y', linestyle='--', alpha=0.4, color='gray', zorder=0)
+        
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        ax.legend(loc='upper right', frameon=True, framealpha=1.0, shadow=True, borderpad=1)
         
         hist_path = output_file.replace('.txt', '_hist.png')
-        if hist_path == output_file: hist_path += ".png" # Fallback if no extension
+        if hist_path == output_file: hist_path += ".png"
         
-        plt.savefig(hist_path)
+        plt.tight_layout() # Ensures labels don't get cut off
+        plt.savefig(hist_path, dpi=300) # 300 DPI is standard for printing posters
+        plt.close()
+        
         logger.info(f"Error distribution histogram saved to {hist_path}")
 
 if __name__ == "__main__":

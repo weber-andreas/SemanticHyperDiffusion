@@ -73,39 +73,62 @@ def main():
     scores = list(failure_counts.values())
     max_score = len(classifier_failures) 
     
-    # Plot Histogram (Same Style as Loss outliers)
-    plt.figure(figsize=(10, 6))
+    intersection_ids = [sid for sid, count in failure_counts.items() if count == max_score]
+        
+    # Update Global Font Sizes for Poster
+    plt.rcParams.update({
+            'font.size': 24,          
+            'axes.titlesize': 32,    
+            'axes.labelsize': 26,     
+            'xtick.labelsize': 22,    
+            'ytick.labelsize': 22,
+            'legend.fontsize': 24,    
+            'figure.titlesize': 34,
+            'font.family': 'sans-serif'
+        })
+
+    fig, ax = plt.subplots(figsize=(20, 5))
     
-    # Centered bins
+
     bins = np.arange(max_score + 2) - 0.5
     
-    n, bins, patches = plt.hist(scores, bins=bins, color='skyblue', edgecolor='black', alpha=0.7, log=False)
+    n, bins, patches = ax.hist(scores, bins=bins, color='#3B75AF', edgecolor='white', 
+                               linewidth=1.2, alpha=0.9, log=False, label='Shape Counts', zorder=3)
     
     cutoff_x = max_score - 0.5
-    plt.axvline(x=cutoff_x, color='red', linestyle='dashed', linewidth=2, label='Outlier Cutoff')
+    ax.axvline(x=cutoff_x, color='#D62728', linestyle='--', linewidth=4, label='Max Failures (Intersection)')
     
-    plt.title(f"Distribution of Semantic Ambiguity (N={len(all_shapes)})")
-    plt.xlabel("Number of Classifiers Failed")
-    plt.ylabel("Frequency")
-    plt.xticks(range(max_score + 1))
-    plt.legend()
-    plt.grid(axis='y', alpha=0.5)
+    ax.set_title(f"Distribution of Semantic Ambiguity\n(N={len(all_shapes)})", fontweight='bold', pad=20)
+    ax.set_xlabel("Number of Classifiers Failed", labelpad=15)
+    ax.set_ylabel("Frequency", labelpad=15)
+    ax.set_xticks(range(max_score + 1))
+    
+    ax.grid(axis='y', linestyle='--', alpha=0.4, color='gray', zorder=0)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    # text annotations for small bars
+    # Text Annotations
     for i in range(max_score + 1):
         if i < len(n):
             count = int(n[i])
             if count > 0:
-                plt.text(i, count, f"{count}", ha='center', va='bottom', fontsize=10, fontweight='bold')
+                # fontsize=16 ensures the numbers are readable from a distance
+                ax.text(i, count + (max(n)*0.01), f"{count}", ha='center', va='bottom', 
+                        fontsize=16, fontweight='bold', color='#333333')
+
+    ax.legend(loc='upper right', frameon=True, framealpha=1.0, shadow=True, borderpad=1)
 
     # Save Plots
     os.makedirs(args.output_dir, exist_ok=True)
     output_path = os.path.join(args.output_dir, 'semantic_outlier_hist.png')
-    plt.savefig(output_path, bbox_inches='tight')
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300)
+    plt.close()
+    
     logger.info(f"Histogram saved to: {output_path}")
 
     # Save ids failed by all classifiers as "problematic shapes"
-    intersection_ids = [sid for sid, count in failure_counts.items() if count == max_score]
     list_path = os.path.join(args.output_dir, 'semantic_outliers_intersection.txt')
     with open(list_path, 'w') as f:
         for sid in sorted(intersection_ids):
