@@ -2,7 +2,7 @@ input_type: "mesh"
 output_type: "occ" # or sdf or occ
 augment_on_the_fly: False
 mesh_jitter: False
-dataset_folder: "data/baseline/planes"
+dataset_folder: "data/baseline/02691156/"
 dataset_expert_folder: "data/shapenetpart/PartAnnotation/02691156/points/"
 label_folder: "data/shapenetpart/PartAnnotation/02691156/expert_verified/points_label/"
 label_names: ["body", "wing", "tail", "engine"]
@@ -14,7 +14,7 @@ model_type: mlp_3d
 bayesian: False
 logging_root: './logs'
 shape_modify: 'no'
-exp_name: "overfit_plane"
+exp_name: "overfit_plane_new_loss"
 steps_til_summary: 100
 epochs_til_ckpt: 1
 hidden_features: 128
@@ -40,7 +40,7 @@ is_meta: False #True
 strategy: first_weights
 clip_grad: False
 out_act: sigmoid
-logging: False
+logging: True
 mlp_config:
   out_size: 1
   use_leaky_relu: False
