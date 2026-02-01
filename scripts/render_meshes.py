@@ -98,7 +98,7 @@ def render_mesh_with_ground(
         mesh_copy = clean_mesh(mesh.copy())
 
     mesh_copy.merge_vertices()
-    # flip normals to face outward
+    mesh_copy.fill_holes()
     mesh_copy.fix_normals()
 
     # 1. Center the mesh
@@ -125,7 +125,7 @@ def render_mesh_with_ground(
             baseColorFactor=color,
             metallicFactor=0.0,
             roughnessFactor=1.0,
-            doubleSided=True,
+            doubleSided=False,
         ),
     )
 
@@ -340,7 +340,13 @@ def render_meshes(mesh_folder, output_folder, mesh_list=None):
         print(f"  Rendering {os.path.basename(mesh_path)}...")
         try:
             mesh = trimesh.load(mesh_path)
-            pil_img = render_mesh_with_ground(mesh)
+            if "neighbor" in mesh_path:
+                color = [0.68, 0.12, 0.2, 1.0]
+            else:
+                color = [0.08, 0.15, 0.45, 1]
+            pil_img = render_mesh_with_ground(
+                mesh, color=color, skip_cleanup=False, scale_multiplier=0.7
+            )
 
             out_name = f"{Path(mesh_path).stem}_render.png"
             out_path = os.path.join(output_folder, out_name)
@@ -378,8 +384,8 @@ def create_grid(
 
 
 if __name__ == "__main__":
-    mesh_folder = "gen_meshes/semanticHD_filtered"
-    output_folder = "visualizations/rendered_meshes/semantic_hd_plane"
+    mesh_folder = "gen_meshes/poster_results/part_gen_with_knn/poster_results_2"
+    output_folder = "visualizations/rendered_meshes/poster/sample_2"
 
     hyperdiff_specific_meshes = [
         "mesh_6.obj",
@@ -399,7 +405,29 @@ if __name__ == "__main__":
         "mesh_11.obj",
     ]
 
-    images = render_meshes(mesh_folder, output_folder, mesh_list=semantic_hd_meshes)
+    semantic_hd_combination_1 = [
+        "0_query.obj",
+        "1_neighbor_33fff5b8d113cca41b950a59358e57bd.obj_dist_0.0653.obj",
+        "2_neighbor_1c93b0eb9c313f5d9a6e43b878d5b335.obj_dist_0.0661.obj",
+        "3_neighbor_697b4a3b6a380443c503a3776fc280fe.obj_dist_0.0710.obj",
+    ]
+    semantic_hd_combination_2 = [
+        "0_query.obj",
+        "1_neighbor_6187d076d53429aa67c54439d6177032.obj_dist_0.0348.obj",
+        "2_neighbor_2c9331f57865a9d2bd34bbc5253f83f8.obj_dist_0.0392.obj",
+        "3_neighbor_240fd3c1fd804ec1b8cf782e8c539948.obj_dist_0.0396.obj",
+    ]
+    semantic_hd_combination_3 = [
+        "body.ply",
+        "wing.ply",
+        "tail.ply",
+        "engine.ply",
+        "hybrid_naive.ply",
+    ]
+
+    images = render_meshes(
+        mesh_folder, output_folder, mesh_list=semantic_hd_combination_3
+    )
     rows = 1
     cols = len(images) // rows
 
