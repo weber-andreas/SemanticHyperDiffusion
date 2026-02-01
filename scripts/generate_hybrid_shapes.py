@@ -56,7 +56,7 @@ def load_system(config_path, ckpt_path):
     model.eval()
     return model, template_mlp
 
-# SDEEdit Logic
+# SDEdit Logic
 @torch.no_grad()
 def generate_base_shapes(diffuser, n_samples=2):
     """Generates random valid shapes from the learned distribution."""
@@ -186,7 +186,7 @@ def harmonize(diffuser, latent_vector, strength):
         
     return img
 
-def save_result(weights, diffuser, filename):
+def save_result(weights, diffuser, filename, part="all"):
     """Denormalizes weights, saves .pth, and generates .ply mesh."""
     # Denormalize
     final_weights = weights / diffuser.cfg.normalization_factor
@@ -217,84 +217,114 @@ def save_result(weights, diffuser, filename):
     
     # Generate Mesh
     sdf_decoder = SDFDecoder(
-        None, cfg=diffuser.mlp_kwargs, device=DEVICE
+        None, cfg=diffuser.mlp_kwargs, device=DEVICE, part=part
     )
     sdf_decoder.model = mlp.to(DEVICE)
     
     sdf_meshing.create_mesh(
-        sdf_decoder, filename, N=256, level=0.0, device=DEVICE
+        sdf_decoder, filename, N=512, level=0.0, device=DEVICE
     )
     print(f"Saved: {filename}.ply")
 
+def load_or_generate(path, name, diffuser, norm_factor):
+    if path:
+        print(f"Loading {name} from {path}...")
+        return load_latents_from_file(path, norm_factor)
+    else:
+        print(f"Generating {name} via Diffusion...")
+        return generate_base_shapes(diffuser, n_samples=1)[0].unsqueeze(0)
+    
+def resolve_parts(requested_parts, all_parts):
+    """Helper to convert list of strings/indices into validated part names."""
+    if not requested_parts:
+        return []
+    resolved = []
+    for p in requested_parts:
+        if p.isdigit():
+            idx = int(p)
+            if 0 <= idx < len(all_parts):
+                resolved.append(all_parts[idx])
+        elif p in all_parts:
+            resolved.append(p)
+    return resolved
+
 def main():
-    parser = argparse.ArgumentParser(description="Generate Hybrid Shapes via Semantic SDEEdit")
+    parser = argparse.ArgumentParser(description="Generate Hybrid Shapes from up to 4 parents")
     parser.add_argument('--config', type=str, default="configs/diffusion_configs/train_plane_moe.yaml")
     parser.add_argument('--ckpt', type=str, required=True, help="Path to diffusion .ckpt")
     parser.add_argument('--out_dir', type=str, default="hybrid_results")
-    parser.add_argument('--strength', type=float, default=0.2, help="Harmonization strength (0.0 - 1.0)")
-    parser.add_argument('--mix_count', type=int, default=2, help="Number of parts to mix from A")
-    parser.add_argument('--parts', type=str, nargs='+', default=None, 
-                        help="Specific part names or indices to swap. If not provided, random selection is used.")
-    parser.add_argument('--shape_A', type=str, default=None, help="Path to .pth weights for Parent A (Source)")
-    parser.add_argument('--shape_B', type=str, default=None, help="Path to .pth weights for Parent B (Base)")
+    parser.add_argument('--strength', type=float, default=0.2, help="Harmonization strength")
+    
+    # Shape Paths
+    parser.add_argument('--shape_A', type=str, default=None)
+    parser.add_argument('--shape_B', type=str, default=None)
+    parser.add_argument('--shape_C', type=str, default=None)
+    parser.add_argument('--shape_D', type=str, default=None)
+
+    parser.add_argument('--parts_A', type=str, nargs='+', default=['engine'], 
+                        help="Parts from A (Default: engine)")
+    parser.add_argument('--parts_C', type=str, nargs='+', default=['tail'], 
+                        help="Parts from C (Default: tail)")
+    parser.add_argument('--parts_D', type=str, nargs='+', default=['body'], 
+                        help="Parts from D (Default: body)")
+    
+    parser.add_argument('--random', action='store_true', help="Force random selection instead of defaults")
 
     args = parser.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
 
     diffuser, template_mlp = load_system(args.config, args.ckpt)
-    
     part_index_map = get_part_indices(template_mlp)
     all_parts = list(part_index_map.keys())
-    print(f"Computed Vector Layout: {all_parts}")
-
     norm_factor = diffuser.cfg.normalization_factor
-    # Handle Parent A
-    if args.shape_A:
-        parent_A = load_latents_from_file(args.shape_A, norm_factor)
+
+    parent_A = load_or_generate(args.shape_A, "Parent A", diffuser, norm_factor)
+    parent_B = load_or_generate(args.shape_B, "Parent B (Base)", diffuser, norm_factor)
+    parent_C = load_or_generate(args.shape_C, "Parent C", diffuser, norm_factor)
+    parent_D = load_or_generate(args.shape_D, "Parent D", diffuser, norm_factor)
+
+    if args.random:
+        print("Random mode enabled. Ignoring defaults...")
+        sampled = random.sample(all_parts, k=min(3, len(all_parts)))
+        parts_from_A = [sampled[0]] if len(sampled) >= 1 else []
+        parts_from_C = [sampled[1]] if len(sampled) >= 2 else []
+        parts_from_D = [sampled[2]] if len(sampled) >= 3 else []
     else:
-        print("Generating Parent A via Diffusion...")
-        parent_A = generate_base_shapes(diffuser, n_samples=1)[0].unsqueeze(0)
+        # Use the defaults defined in argparse (or user overrides)
+        parts_from_A = resolve_parts(args.parts_A, all_parts)
+        parts_from_C = resolve_parts(args.parts_C, all_parts)
+        parts_from_D = resolve_parts(args.parts_D, all_parts)
 
-    if args.shape_B:
-        parent_B = load_latents_from_file(args.shape_B, norm_factor)
-    else:
-        print("Generating Parent B via Diffusion...")
-        parent_B = generate_base_shapes(diffuser, n_samples=1)[0].unsqueeze(0)
-    
-    save_result(parent_A, diffuser, os.path.join(args.out_dir, "parent_A"))
-    save_result(parent_B, diffuser, os.path.join(args.out_dir, "parent_B"))
+    #INFO: This does not work for multiple parts per shape
+    part_A = parts_from_A[0]
+    part_C = parts_from_C[0]
+    part_D = parts_from_D[0]
+    all_parts.remove(part_A)
+    all_parts.remove(part_C)
+    all_parts.remove(part_D)
+    part_B = all_parts[0]
+    save_result(parent_A, diffuser, os.path.join(args.out_dir, part_A), part_A)
+    save_result(parent_B, diffuser, os.path.join(args.out_dir, part_B), part_B)
+    save_result(parent_C, diffuser, os.path.join(args.out_dir, part_C), part_C)
+    save_result(parent_D, diffuser, os.path.join(args.out_dir, part_D), part_D)
 
-    # Select Random Parts if given
-    if args.parts:
-        parts_to_swap = []
-        for p in args.parts:
-            # Check if index or name
-            if p.isdigit():
-                idx = int(p)
-                if 0 <= idx < len(all_parts):
-                    parts_to_swap.append(all_parts[idx])
-                else:
-                    print(f"Warning: Index {idx} out of range. Skipping.")
-            elif p in all_parts:
-                parts_to_swap.append(p)
-            else:
-                print(f"Warning: Part name '{p}' not found in layout. Skipping.")
-        
-        if not parts_to_swap:
-            print("No valid parts specified. Falling back to random selection.")
-            parts_to_swap = random.sample(all_parts, k=min(args.mix_count, len(all_parts)))
-    else:
-        # Default: Random Selection
-        parts_to_swap = random.sample(all_parts, k=min(args.mix_count, len(all_parts)))
+    print(f"Mixing Strategy: Base=B")
+    if parts_from_A: print(f" -> Overwriting {parts_from_A} from A")
+    if parts_from_C: print(f" -> Overwriting {parts_from_C} from C")
+    if parts_from_D: print(f" -> Overwriting {parts_from_D} from D")
 
-    print(f"Parts being swapped: {parts_to_swap}")
-    
-    # Naive Stitching
-    naive_latent = mix_latents(parent_A, parent_B, part_index_map, parts_to_swap)
-    save_result(naive_latent, diffuser, os.path.join(args.out_dir, "hybrid_naive"))
+    # Sequential Stitching
+    current_latent = parent_B.clone()
+    if parts_from_A:
+        current_latent = mix_latents(parent_A, current_latent, part_index_map, parts_from_A)
+    if parts_from_C:
+        current_latent = mix_latents(parent_C, current_latent, part_index_map, parts_from_C)
+    if parts_from_D:
+        current_latent = mix_latents(parent_D, current_latent, part_index_map, parts_from_D)
 
-    # SDFEdit version
-    healed_latent = harmonize(diffuser, naive_latent, strength=args.strength)
+    # SDEdit logic
+    save_result(current_latent, diffuser, os.path.join(args.out_dir, "hybrid_naive"))
+    healed_latent = harmonize(diffuser, current_latent, strength=args.strength)
     save_result(healed_latent, diffuser, os.path.join(args.out_dir, "hybrid_healed"))
 
 if __name__ == "__main__":
