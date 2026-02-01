@@ -9,13 +9,12 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
 from scipy.spatial.transform import Rotation
-from sklearn.cluster import KMeans
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 
-# Needed for Path
+# Needed for Path imports
 import sys
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if ROOT_DIR not in sys.path:
@@ -54,12 +53,14 @@ def load_activations_single_mlp(mlp_path: str, points_tensor: torch.Tensor, mlp_
         model({'coords': points_tensor[None, ...]})
     return {name: tensor.squeeze(0).cpu() for name, tensor in activations_capture.items()}
 
-def load_activations_composite(mlp_path: str, points_tensor: torch.Tensor, device: torch.device) -> Dict[str, Dict[str, torch.Tensor]]:
+def load_activations_composite(mlp_path: str, points_tensor: torch.Tensor, cfg, device: torch.device) -> Dict[str, Dict[str, torch.Tensor]]:
     """Loads an MLPComposite, registers hooks, and captures activations for each part."""
     global activations_capture
-    model = get_composite_model(output_type="occ").to(device)
+    
+    model = get_composite_model(cfg, model_type="composite", output_type=cfg.output_type).to(device)
     model.load_state_dict(torch.load(mlp_path, map_location=device))
     model.eval()
+    
     all_parts_activations = {}
     for part_name, part_model in model.parts.items():
         activations_capture.clear()
@@ -77,18 +78,23 @@ def align_and_get_labels(coords_from_activations, label_coords_path, label_seg_p
     """Aligns labeled point cloud and remaps labels via nearest neighbors."""
     coords_from_labels_raw = np.loadtxt(label_coords_path)
     original_part_labels = np.loadtxt(label_seg_path, dtype=int)
+    
     def normalize_to_half_box(points):
         mean = np.mean(points, axis=0, keepdims=True)
         points_centered = points - mean
         v_max, v_min = np.amax(points_centered), np.amin(points_centered)
         scale_factor = 0.5 * 0.95 / (max(abs(v_min), abs(v_max)))
         return points_centered * scale_factor
+    
     target_coords_normalized = normalize_to_half_box(coords_from_activations)
     label_coords_normalized = normalize_to_half_box(coords_from_labels_raw)
+    
     rotation = Rotation.from_euler('y', 90, degrees=True)
     aligned_label_coords = rotation.apply(label_coords_normalized)
+    
     nn_search = NearestNeighbors(n_neighbors=1, algorithm="kd_tree").fit(aligned_label_coords)
     distances, indices = nn_search.kneighbors(target_coords_normalized)
+    
     if np.max(distances) > alignment_threshold:
         print(f"  [WARNING] High alignment error ({np.max(distances):.4f}). Skipping analysis.")
         return None
@@ -107,7 +113,6 @@ def calculate_metrics_for_group(activations, point_indices, all_indices) -> Dict
     # Sparsity: Percentage of non-zero activations for this group
     sparsity = (group_post_acts > 0).float().mean().item() * 100
 
-    
     # Top-k metrics focused on the most active neurons
     avg_post_acts_per_neuron = torch.mean(group_post_acts, dim=0)
     topk_k = min(5, group_pre_acts.shape[1])
@@ -152,11 +157,12 @@ def calculate_jaccard_disentanglement(groups: Dict) -> float:
     return np.mean(all_jaccards) if all_jaccards else 0.0
 
 
-def analyze_shape(shape_id, model_type, mlp_params, paths, device, part_label_to_name, alignment_threshold) -> List[Dict]:
+def analyze_shape(shape_id, model_type, cfg, paths, device, part_label_to_name, alignment_threshold) -> List[Dict]:
     """Main analysis pipeline for a single shape, dispatched by model_type."""
     pc_npy_path = paths['pc_dir'] / f"{shape_id}.obj.npy"
-    # TODO: Same jitter issue as above
-    mlp_path = paths['mlp_dir'] / f"occ_{shape_id}_model_final.pth"
+    #TODO: Make jitter_0 an optional addition for backwards compatability
+    # Currently you have to add jitter_0 manually for old mlp weights
+    mlp_path = paths['mlp_dir'] / f"{cfg.output_type}_{shape_id}_model_final.pth"
     pc_pts_path = paths['part_anno_points'] / f"{shape_id}.pts"
     seg_path = paths['part_anno_labels'] / f"{shape_id}.seg"
     
@@ -173,30 +179,41 @@ def analyze_shape(shape_id, model_type, mlp_params, paths, device, part_label_to
     }
 
     if model_type == 'composite':
-        all_parts_activations = load_activations_composite(mlp_path, points_tensor, device)
+        all_parts_activations = load_activations_composite(mlp_path, points_tensor, cfg, device)
         part_names = sorted(all_parts_activations.keys())
         layer_names = list(next(iter(all_parts_activations.values())).keys())
         
         activations_dict = {}
         for layer_name in layer_names:
-            total_neurons = sum(all_parts_activations[p][layer_name].shape[1] for p in part_names)
-            virtual_activations = torch.zeros(len(points_tensor), total_neurons)
+            # Masking unused parts with 0 logic
+            # total_neurons = sum(all_parts_activations[p][layer_name].shape[1] for p in part_names)
+            # virtual_activations = torch.zeros(len(points_tensor), total_neurons)
+            # offset = 0
+            # for part_name in part_names:
+            #     part_id = ...
+            #     point_indices = ...
+            #     activations = all_parts_activations[part_name][layer_name]
+            #     num_neurons_part = activations.shape[1]
+            #     if len(point_indices) > 0:
+            #         virtual_activations[point_indices, offset : offset + num_neurons_part] = activations[point_indices]
+            #     offset += num_neurons_part
             
-            offset = 0
+            # Full Concat Logic, i.e using all parts activations
+            # This creates a wide tensor [N_points, Total_Neurons_All_Parts]
+            part_acts_for_layer = []
             for part_name in part_names:
-                part_id = [k for k, v in part_label_to_name.items() if v.lower() == part_name.lower()][0]
-                point_indices = np.where(part_labels == part_id)[0]
-                
-                activations = all_parts_activations[part_name][layer_name]
-                num_neurons_part = activations.shape[1]
-                
-                if len(point_indices) > 0:
-                    virtual_activations[point_indices, offset : offset + num_neurons_part] = activations[point_indices]
-                
-                offset += num_neurons_part
+                # This tensor is [N_points, Neurons_in_this_part]
+                part_acts_for_layer.append(all_parts_activations[part_name][layer_name])
+            
+            # Concatenate along feature dimension (dim 1)
+            virtual_activations = torch.cat(part_acts_for_layer, dim=1)
+            
             activations_dict[layer_name] = virtual_activations
     
     elif model_type == 'single':
+        mlp_params = cfg.get('mlp_config')
+        with open_dict(mlp_params):
+             mlp_params['output_type'] = cfg.output_type
         activations_dict = load_activations_single_mlp(mlp_path, points_tensor, mlp_params, device)
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
@@ -231,31 +248,51 @@ def analyze_shape(shape_id, model_type, mlp_params, paths, device, part_label_to
 def main(args: argparse.Namespace):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg = OmegaConf.load(args.config_path)
-    mlp_params = cfg.get('mlp_config')
-    if mlp_params: mlp_params['output_type'] = cfg.output_type
 
-    category_name = synset_offset_2_category[args.category_id]
-    if category_name == 'Airplane': part_label_to_name = {1: "Body", 2: "Wing", 3: "Tail", 4: "Engine"}
-    else: print(f"Warning: Part labels for '{category_name}' not hardcoded."); part_label_to_name = {i: f"Part {i}" for i in range(1, 50)}
+    # Dynamic Label Mapping
+    if 'label_names' in cfg:
+        part_label_to_name = {i+1: name for i, name in enumerate(cfg.label_names)}
+    else:
+        print("Warning: label_names not in config, falling back to defaults.")
+        category_name = synset_offset_2_category.get(args.category_id, "Unknown")
+        if category_name == 'Airplane': 
+             part_label_to_name = {1: "body", 2: "wing", 3: "tail", 4: "engine"}
+        else:
+             part_label_to_name = {i: f"Part {i}" for i in range(1, 50)}
+
     paths = {'pc_dir': Path(args.dataset_dir), 'mlp_dir': Path(args.mlp_weights_dir), 'part_anno_points': Path(args.part_anno_dir) / args.category_id / 'points', 'part_anno_labels': Path(args.part_anno_dir) / args.category_id / 'expert_verified' / 'points_label'}
     
     all_mlp_files = sorted(paths['mlp_dir'].glob('*.pth'))
     shape_ids_to_process = []
     print("Screening dataset for complete file sets...")
+    
     for mlp_file in tqdm(all_mlp_files, desc="Screening files"):
         try: shape_id = mlp_file.name.split('_')[1]
         except IndexError: continue
-        #TODO: Make jitter_0 an optional addition for backwards compatability
-        # Currently you have to add jitter_0 manually for old mlp weights
-        if all(p.exists() for p in [paths['pc_dir'] / f"{shape_id}.obj.npy", paths['mlp_dir'] / f"occ_{shape_id}_model_final.pth", paths['part_anno_points'] / f"{shape_id}.pts", paths['part_anno_labels'] / f"{shape_id}.seg"]):
+        
+        if all(p.exists() for p in [paths['pc_dir'] / f"{shape_id}.obj.npy", paths['part_anno_points'] / f"{shape_id}.pts", paths['part_anno_labels'] / f"{shape_id}.seg"]):
             shape_ids_to_process.append(shape_id)
-            
+    
+    if args.comparison_weights_dir:
+        comp_dir = Path(args.comparison_weights_dir)
+        # Extract IDs from the comparison directory
+        comp_shape_ids = set()
+        for f in comp_dir.glob('*.pth'):
+            try: comp_shape_ids.add(f.name.split('_')[1])
+            except IndexError: continue
+        
+        # Filter to keep only intersection
+        prev_count = len(shape_ids_to_process)
+        shape_ids_to_process = [sid for sid in shape_ids_to_process if sid in comp_shape_ids]
+        print(f"Intersection Filter: Reduced from {prev_count} to {len(shape_ids_to_process)} shapes to match comparison directory.")
+
     if not shape_ids_to_process: print("No complete sets of files were found. Exiting."); return
         
     all_shape_results = []
     print(f"\nFound {len(shape_ids_to_process)} complete shapes. Starting analysis...")
+    
     for shape_id in tqdm(shape_ids_to_process, desc="Analyzing Shapes"):
-        results = analyze_shape(shape_id, args.model_type, mlp_params, paths, device, part_label_to_name, args.alignment_threshold)
+        results = analyze_shape(shape_id, args.model_type, cfg, paths, device, part_label_to_name, args.alignment_threshold)
         all_shape_results.extend(results)
 
     if not all_shape_results: print("No results were generated. Exiting."); return
@@ -281,14 +318,15 @@ def main(args: argparse.Namespace):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run quantitative activation analysis over a dataset.")
-    parser.add_argument('--model_type', type=str, required=True, choices=['single', 'composite'], help="Type of model to analyze: 'single' (MLP3D) or 'composite'.")
-    parser.add_argument('--config_path', type=str, default='configs/overfitting_configs/overfit_plane.yaml', help='Path to the model config file.')
+    parser.add_argument('--model_type', type=str, required=True, choices=['single', 'composite'], help="Type of model to analyze.")
+    parser.add_argument('--config_path', type=str, default='configs/overfitting_configs/overfit_plane_equal.yaml', help='Path to the model config file.')
     parser.add_argument('--dataset_dir', type=str, default='./data/baseline/02691156_2048_pc', help='Directory of pre-sampled point clouds (.npy files).')
     parser.add_argument('--category_id', type=str, default='02691156', help='ShapeNet category ID.')
-    parser.add_argument('--mlp_weights_dir', type=str, default='./mlp_weights/212_statistic', help='Directory with MLP .pth checkpoints.')
-    parser.add_argument('--part_anno_dir', type=str, default='./data/shapenetpart/PartAnnotation', help='Root directory for PartAnnotation data.')
+    parser.add_argument('--mlp_weights_dir', type=str, default='./mlp_weights/overfit_plane_new_loss', help='Directory with MLP .pth checkpoints.')
+    parser.add_argument('--part_anno_dir', type=str, default='./data/shapenetpart_dir/PartAnnotation', help='Root directory for PartAnnotation data.')
     parser.add_argument('--output_csv', type=str, default='quantitative_analysis_results.csv', help='Path to save the final CSV results.')
     parser.add_argument('--alignment_threshold', type=float, default=0.1, help='Threshold for alignment error during label matching.')
+    parser.add_argument('--comparison_weights_dir', type=str, default=None, help='Optional: Directory of the contrasting model type (e.g. composite) to ensure we only analyze shapes present in both.')
 
     args = parser.parse_args()
     main(args)

@@ -5,7 +5,7 @@ mesh_jitter: False
 dataset_folder: "data/baseline/03001627/"
 dataset_expert_folder: "data/shapenetpart/PartAnnotation/03001627/points/"
 label_folder: "data/shapenetpart/PartAnnotation/03001627/expert_verified/points_label/"
-label_names: ["arm", "seat", "leg", "back"]
+label_names: ["back", "seat", "leg", "arm"]
 common_file_ids: "data/common/chair_common_shapes.txt"
 wandb_dir: .
 batch_size: 2048
@@ -40,7 +40,7 @@ is_meta: False #True
 strategy: first_weights
 clip_grad: False
 out_act: sigmoid
-logging: False
+logging: True
 mlp_config:
   out_size: 1
   use_leaky_relu: False
@@ -49,10 +49,11 @@ mlp_config:
   move: False
 # for semantic decomposition
 part_distribution:
-  arm: 0.25
+  back: 0.25
   seat: 0.25
   leg: 0.25
-  back: 0.25
+  arm: 0.25
+
 part_mlp_config:
   total_hidden_size: 240
   input_size: 3

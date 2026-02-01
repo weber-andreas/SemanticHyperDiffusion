@@ -1,3 +1,5 @@
+"""Renders 3D meshes from a folder and creates a grid image of the renders."""
+
 import os
 import sys
 import glob

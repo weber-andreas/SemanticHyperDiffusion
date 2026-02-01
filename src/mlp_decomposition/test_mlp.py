@@ -54,14 +54,13 @@ class SDFDecoder(torch.nn.Module):
         return out
 
 
-def parse_arguments():
+def main():
     """Parses command-line arguments."""
     p = configargparse.ArgumentParser()
     p.add(
         "-c",
         "--config_filepath",
         required=False,
-        is_config_file=True,
         help="Path to config file.",
     )
     p.add_argument(
@@ -100,7 +99,7 @@ def parse_arguments():
     p.add_argument(
         "--resolution",
         type=int,
-        default=1600,
+        default=128,
     )
     p.add_argument(
         "--level",
@@ -168,5 +167,11 @@ def parse_arguments():
     )
 
 
+"""
+python src/mlp_decomposition/test_mlp.py  \
+--experiment_name overfitting_chair  \
+--checkpoint_path logs/overfit_chair/occ_10d5c2f88b60bbf5febad4f49b26ec52_model_final.pth \
+--config_filepath configs/overfitting_configs/overfit_chair_equal.yaml 
+"""
 if __name__ == "__main__":
     main()

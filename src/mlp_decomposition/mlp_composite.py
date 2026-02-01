@@ -3,7 +3,7 @@ import sys
 
 import torch.nn as nn
 import torch
-
+from torch.func import functional_call, vmap
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(ROOT_DIR)
@@ -13,6 +13,77 @@ from src.mlp_models import MLP3D
 class MLPMoE(nn.Module):
     def __init__(self, registry):
         super().__init__()
+        self.registry = registry
+        self.parts = nn.ModuleDict()
+
+        for part_name, part_config in registry.items():
+            self.parts[part_name] = MLP3D(**part_config)
+
+        # Cache keys to ensure order consistency between stack and dict reconstruction
+        self.part_names = list(registry.keys())
+
+    def forward(self, model_input):
+        if isinstance(model_input, dict):
+            x_in = model_input["coords"]
+            expert_input = model_input
+        else:
+            x_in = model_input
+            expert_input = {"coords": model_input}
+
+        # Manual Stacking (Guarantees Autograd Connection)
+        # first expert serves as the architecture template
+        first_part_key = self.part_names[0]
+        base_model = self.parts[first_part_key]
+
+        params = {}
+        for name, param in base_model.named_parameters():
+            # Iterate through all experts and stack this specific parameter
+            # This ensures gradients flow from 'params' back to 'self.parts'
+            params[name] = torch.stack(
+                [self.parts[key].get_parameter(name) for key in self.part_names]
+            )
+
+        # Stack buffers
+        buffers = {}
+        for name, buffer in base_model.named_buffers():
+            buffers[name] = torch.stack(
+                [self.parts[key].get_buffer(name) for key in self.part_names]
+            )
+
+        # Vectorized Execution
+        def compute_expert(p, b, data):
+            # apply the stacked weights 'p' to the 'base_model' architecture
+            out = functional_call(base_model, (p, b), args=(data,), kwargs=None)
+            return out["model_out"]
+
+        # vmap output Num_Experts, Batch, Output
+        expert_results = vmap(compute_expert, in_dims=(0, 0, None))(
+            params, buffers, expert_input
+        )
+        # Reconstruct part outputs dict
+        part_outputs = {
+            name: expert_results[i] for i, name in enumerate(self.part_names)
+        }
+        # Max aggregation
+        max_occ = expert_results.max(dim=0).values
+
+        return {"model_in": x_in, "model_out": max_occ, "parts": part_outputs}
+
+    def flatten(self):
+        flat_vector = torch.cat([part.flatten() for part in self.parts.values()])
+        return flat_vector
+
+    def unflatten(self, flat_vector):
+        for part in self.parts.values():
+            part.unflatten(flat_vector)
+
+    def num_trainable_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+
+class MLPMoE_old(nn.Module):
+    def __init__(self, registry):
+        super().__init__()
         self.parts = nn.ModuleDict()
         self.registry = registry
 
@@ -20,7 +91,7 @@ class MLPMoE(nn.Module):
             self.parts[part_name] = MLP3D(**part_config)
 
     def forward(self, model_input):
-        #TODO: occ should be label
+        # TODO: occ should be label
         # During training, model_input is a dict with "coords" and "occ" keys
         if isinstance(model_input, dict):
             x_in = model_input["coords"]
@@ -28,22 +99,21 @@ class MLPMoE(nn.Module):
         else:
             x_in = model_input
             expert_input = {"coords": model_input}
-    
+
         # Always run all parts but choose max for inference and give all part outputs for training
         # TODO: For now we loop but stacking the weights for vectorized training would be nice.
         # Problem: This might be inefficient for heterogenous sizes (Block Diagonal?)
         part_outputs = {}
-        expert_tensors = [] 
+        expert_tensors = []
         for part_name, part_expert in self.parts.items():
             part_output = part_expert(expert_input)["model_out"]
             part_outputs[part_name] = part_output
             expert_tensors.append(part_output)
-        
-        #TODO: For optimization you could remove this while training
+
+        # TODO: For optimization you could remove this while training
         # But it could also be used for a global loss
         max_occ = torch.stack(expert_tensors).max(dim=0).values
         return {"model_in": x_in, "model_out": max_occ, "parts": part_outputs}
-    
 
     def flatten(self):
         flat_vector = torch.cat([part.flatten() for part in self.parts.values()])
@@ -59,7 +129,7 @@ class MLPMoE(nn.Module):
         across all sub-networks in the composite model.
         """
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-    
+
 
 class MLPComposite(nn.Module):
     def __init__(self, registry):
@@ -121,7 +191,7 @@ class MLPComposite(nn.Module):
         across all sub-networks in the composite model.
         """
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-    
+
 
 def get_model(cfg, model_type="moe", output_type="occ"):
     distribution = cfg.part_distribution
@@ -134,7 +204,6 @@ def get_model(cfg, model_type="moe", output_type="occ"):
     multires = part_mlp_config["multires"]
     use_leaky_relu = part_mlp_config["use_leaky_relu"]
     use_bias = part_mlp_config["use_bias"]
-
 
     registry = {}
     for part_name in distribution.keys():
@@ -161,10 +230,10 @@ def get_model(cfg, model_type="moe", output_type="occ"):
 
 def get_model_no_config(model_type="moe", output_type="occ"):
     """
-    Mostly here for backwards compatability. Does not need a config but 
+    Mostly here for backwards compatability. Does not need a config but
     hardcoded values. It is currently used in jupyter notebooks.
     """
-    #distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
+    # distribution = {"wing": 0.2, "body": 0.5, "tail": 0.15, "engine": 0.15}
     distribution = {"body": 0.45, "wing": 0.33, "tail": 0.13, "engine": 0.09}
     total_hidden_size = 212
 

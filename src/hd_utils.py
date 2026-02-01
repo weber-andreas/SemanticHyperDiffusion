@@ -9,6 +9,7 @@ from external.Pointnet_Pointnet2_pytorch.log.classification.pointnet2_ssg_wo_nor
     pointnet2_cls_ssg,
 )
 from external.torchmetrics_fid import FrechetInceptionDistance
+import trimesh
 
 from src.mlp_decomposition.mlp_composite import get_model
 import trimesh
@@ -72,10 +73,9 @@ def get_mlp(mlp_kwargs):
         if mlp_kwargs.model_type == "mlp_3d":
             mlp = MLP3D(**mlp_kwargs)
         else:
-            mlp = get_model(mlp_kwargs, 
-                            model_type=mlp_kwargs.model_type, 
-                            output_type="occ"
-                            )
+            mlp = get_model(
+                mlp_kwargs, model_type=mlp_kwargs.model_type, output_type="occ"
+            )
     else:
         mlp = MLP(**mlp_kwargs)
     return mlp
@@ -141,7 +141,6 @@ def render_mesh(obj):
     color, depth = r.render(scene)
     r.delete()
     return color, depth
-
 
 
 # Calculate look-at matrix for rendering

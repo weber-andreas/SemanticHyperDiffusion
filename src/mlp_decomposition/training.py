@@ -69,12 +69,13 @@ def train(
     best_loss = float("inf")
     patience = cfg.scheduler.patience
     num_bad_epochs = 0
+    labels = {part_name: idx + 1 for idx, part_name in enumerate(cfg.label_names)}
     with tqdm(total=len(train_dataloader) * epochs) as pbar:
         train_losses = []
         for epoch in range(epochs):
 
             total_loss, total_items = 0, 0
-            part_loss_accumulators = {} 
+            part_loss_accumulators = {}
 
             for step, (model_input, gt) in enumerate(train_dataloader):
                 # BUG: This enumerate does go on indefinetly without the following if
@@ -95,10 +96,11 @@ def train(
                     gt = {key: value.double() for key, value in gt.items()}
 
                 if use_lbfgs:
+
                     def closure():
                         optim.zero_grad()
                         model_output = model(model_input)
-                        losses = loss_fn(model_output, gt)
+                        losses = loss_fn(model_output, gt, labels)
                         train_loss = 0.0
                         for loss_name, loss in losses.items():
                             if loss_name != "part_losses":
@@ -109,7 +111,7 @@ def train(
                     optim.step(closure)
 
                 model_output = model(model_input)
-                losses = loss_fn(model_output, gt, model)
+                losses = loss_fn(model_output, gt, labels, model)
 
                 train_loss = 0.0
                 for loss_name, loss in losses.items():
@@ -123,17 +125,19 @@ def train(
 
                 train_losses.append(train_loss.item())
                 # Changed to be more universal
-                batch_size = len(model_input['coords'])
-                total_loss += train_loss.item() * batch_size                    
+                batch_size = len(model_input["coords"])
+                total_loss += train_loss.item() * batch_size
                 total_items += batch_size
 
                 if "part_losses" in losses and isinstance(losses["part_losses"], dict):
                     for p_name, p_loss in losses["part_losses"].items():
                         if p_name not in part_loss_accumulators:
                             part_loss_accumulators[p_name] = 0.0
-                        
+
                         # Accumulate: loss_val * batch_size (matching total_loss logic)
-                        part_loss_accumulators[p_name] += p_loss.mean().item() * batch_size
+                        part_loss_accumulators[p_name] += (
+                            p_loss.mean().item() * batch_size
+                        )
 
                 if not total_steps % steps_til_summary:
                     pass
@@ -215,7 +219,7 @@ def train(
         if "part_losses" in losses and isinstance(losses["part_losses"], dict):
             for p_name, p_loss in losses["part_losses"].items():
                 final_log_data[f"total_part_loss_{p_name}"] = p_loss.mean().item()
-        
+
         wandb.log(final_log_data)
 
         if cfg.strategy != "continue":

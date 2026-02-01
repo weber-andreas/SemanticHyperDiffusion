@@ -29,8 +29,8 @@ For full list please see [hyperdiffusion_env.yaml file](/hyperdiffusion_env.yaml
 Alternative:
 
 ```sh
-conda create -n hyperdiffusion python=3.9
-conda activate hyperdiffusion
+conda create -n semanticHD python=3.9
+conda activate semanticHD
 
 # Simple python geometry processing library
 conda install -c conda-forge igl==2.2.1

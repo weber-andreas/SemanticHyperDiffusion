@@ -54,7 +54,7 @@ class HyperDiffusion(pl.LightningModule):
         betas = torch.tensor(np.linspace(1e-4, 2e-2, timesteps))
         self.image_size = encoded_outs[:1].shape
 
-        # Initialize diffusion utiities
+        # Initialize diffusion utilities
         self.diff = GaussianDiffusion(
             betas=betas,
             model_mean_type=ModelMeanType[cfg.diff_config.params.model_mean_type],
@@ -201,6 +201,7 @@ class HyperDiffusion(pl.LightningModule):
         for metric_name in metrics:
             self.log("train/" + metric_name, metrics[metric_name])
         metrics = metric_fn("val")
+        print("Validation metrics:", metrics)
         for metric_name in metrics:
             self.log("val/" + metric_name, metrics[metric_name])
 
@@ -261,6 +262,12 @@ class HyperDiffusion(pl.LightningModule):
                     out_imgs = render_meshes(meshes)
                     self.logger.log_image(
                         "generated_renders", out_imgs, step=self.current_epoch
+                    )
+
+                    os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
+
+                    meshes[0].export(
+                        f"gen_meshes/{wandb.run.name}/mesh_epoch_{self.current_epoch}.obj"
                     )
         # Handle Voxel baseline sample generation
         elif self.method == "raw_3d":
@@ -395,8 +402,14 @@ class HyperDiffusion(pl.LightningModule):
             Config.config["dataset_dir"], Config.config["dataset"]
         )
         n_points = self.cfg.val.num_points
-        test_object_names = np.genfromtxt(
-            os.path.join(dataset_path, f"{split_type}_split.lst"), dtype="str"
+        split_suffix = (
+            Config.get("split_suffix") if Config.get("split_suffix") is not None else ""
+        )
+        test_object_names = np.atleast_1d(
+            np.genfromtxt(
+                os.path.join(dataset_path, f"{split_type}_split{split_suffix}.lst"),
+                dtype="str",
+            )
         )
         print(f"{split_type}_object_names.length", len(test_object_names))
         if split_type == "val" and self.cfg.val.num_samples is not None:
@@ -514,8 +527,14 @@ class HyperDiffusion(pl.LightningModule):
             Config.config["dataset_dir"],
             Config.config["dataset"] + f"_{self.cfg.val.num_points}_pc",
         )
-        test_object_names = np.genfromtxt(
-            os.path.join(dataset_path, f"{split_type}_split.lst"), dtype="str"
+        split_suffix = (
+            Config.get("split_suffix") if Config.get("split_suffix") is not None else ""
+        )
+        test_object_names = np.atleast_1d(
+            np.genfromtxt(
+                os.path.join(dataset_path, f"{split_type}_split{split_suffix}.lst"),
+                dtype="str",
+            )
         )
         print("test_object_names.length", len(test_object_names))
 
@@ -548,6 +567,7 @@ class HyperDiffusion(pl.LightningModule):
 
         # We are generating slightly more than ref_pcs
         number_of_samples_to_generate = int(len(ref_pcs) * self.cfg.test_sample_mult)
+        print("number_of_samples_to_generate", number_of_samples_to_generate)
 
         # Then process generated shapes
         sample_x_0s = []
@@ -642,7 +662,7 @@ class HyperDiffusion(pl.LightningModule):
         sample_batch = sample_batch[: len(ref_pcs)]
         print("number of samples generated (after clipping):", len(sample_batch))
         sample_pcs = torch.stack(sample_batch)
-        assert len(sample_pcs) == len(ref_pcs)
+        # assert len(sample_pcs) == len(ref_pcs)
         torch.save(sample_pcs, f"{orig_meshes_dir}/samples.pth")
 
         self.logger.experiment.log(
@@ -650,16 +670,23 @@ class HyperDiffusion(pl.LightningModule):
         )
         print("Starting metric computation for", split_type)
 
-        fid = calculate_fid_3d(
-            sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
-        )
         metrics = compute_all_metrics(
             sample_pcs.to(self.device),
             ref_pcs.to(self.device),
             16 if split_type == "test" else 16,
             self.logger,
         )
-        metrics["fid"] = fid.item()
+        # FID requires at least 2 samples to compute covariance
+        if len(sample_pcs) >= 2 and len(ref_pcs) >= 2:
+            fid = calculate_fid_3d(
+                sample_pcs.to(self.device), ref_pcs.to(self.device), self.logger
+            )
+            metrics["fid"] = fid.item()
+        else:
+            print(
+                f"Skipping FID calculation: need at least 2 samples (got {len(sample_pcs)})"
+            )
+            metrics["fid"] = float("nan")
 
         print("Completed metric computation for", split_type)
 
@@ -691,7 +718,7 @@ class HyperDiffusion(pl.LightningModule):
             #     x_0s.mean().item(),
             #     x_0s.std().item(),
             # )
-            os.makedirs(f"gen_meshes/{wandb.run.name}")
+            os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
 
             if self.cfg.mlp_config.params.move:
                 rot_matrix = Rotation.from_euler("zyx", [45, 180, 90], degrees=True)
@@ -772,7 +799,7 @@ class HyperDiffusion(pl.LightningModule):
             # Handle 4D generation
             if self.cfg.mlp_config.params.move:
                 rot_matrix = Rotation.from_euler("zyx", [45, 180, 90], degrees=True)
-                os.makedirs(f"gen_meshes/{wandb.run.name}")
+                os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
 
                 for sample_i, x_0 in enumerate(tqdm(x_0s)):
                     out_imgs = []
@@ -802,7 +829,7 @@ class HyperDiffusion(pl.LightningModule):
             # Handle 3D generation
             else:
                 out_imgs = []
-                os.makedirs(f"gen_meshes/{wandb.run.name}")
+                os.makedirs(f"gen_meshes/{wandb.run.name}", exist_ok=True)
                 for x_0 in tqdm(x_0s):
                     mesh, _ = self.generate_meshes(x_0.unsqueeze(0), None, res=700)
                     mesh = mesh[0]

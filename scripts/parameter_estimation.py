@@ -18,8 +18,27 @@ def estimate_transformer(n_embd, n_layer, n_mlp_flattened, n_input_tokens=0):
     }
 
 
+def estimate_flattened_mlp_params(input_size, hidden_sizes, output_size):
+    """Estimate the total number of parameters (weights + biases) for a fully connected MLP."""
+    sizes = [input_size] + hidden_sizes + [output_size]
+    total_params = 0
+    for i in range(len(sizes) - 1):
+        weights = sizes[i] * sizes[i + 1]
+        biases = sizes[i + 1]
+        total_params += weights + biases
+    return total_params
+
+
 if __name__ == "__main__":
-    # Head dimension time the number of heads equals the embedding dimension
-    print(estimate_transformer(n_embd=2880, n_layer=12, n_mlp_flattened=36737))
-    print(estimate_transformer(n_embd=1024, n_layer=12, n_mlp_flattened=36737))
-    print(estimate_transformer(n_embd=2048, n_layer=12, n_mlp_flattened=36737))
+    n_mlp_flat = estimate_flattened_mlp_params(
+        input_size=3, hidden_sizes=[128, 128, 128], output_size=1
+    )
+    print(f"Flattened MLP params: {n_mlp_flat}")
+    n_mlp_flat_moe = 4 * estimate_flattened_mlp_params(
+        input_size=3, hidden_sizes=[60, 60, 60], output_size=1
+    )
+    print(f"Flattened MoE MLP params: {n_mlp_flat_moe}")
+    # print(estimate_transformer(n_embd=2880, n_layer=12, n_mlp_flattened=n_mlp_flat))
+
+    print(estimate_transformer(n_embd=768, n_layer=12, n_mlp_flattened=n_mlp_flat))
+    print(estimate_transformer(n_embd=768, n_layer=12, n_mlp_flattened=n_mlp_flat_moe))
