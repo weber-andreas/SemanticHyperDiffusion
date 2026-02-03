@@ -37,7 +37,11 @@ if __name__ == "__main__":
     n_mlp_flat_moe = 4 * estimate_flattened_mlp_params(
         input_size=3, hidden_sizes=[60, 60, 60], output_size=1
     )
+    n_mlp_flat_moe_2 = 4 * estimate_flattened_mlp_params(
+        input_size=3, hidden_sizes=[64, 64, 64], output_size=1
+    )
     print(f"Flattened MoE MLP params: {n_mlp_flat_moe}")
+    print(f"Flattened MoE MLP params v2: {n_mlp_flat_moe_2}")
     # print(estimate_transformer(n_embd=2880, n_layer=12, n_mlp_flattened=n_mlp_flat))
 
     print(estimate_transformer(n_embd=768, n_layer=12, n_mlp_flattened=n_mlp_flat))

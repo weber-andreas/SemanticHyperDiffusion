@@ -251,7 +251,7 @@ def parse_arguments():
     p.add_argument(
         "--resolution",
         type=int,
-        default=800,
+        default=250,
         help="Resolution for marching cubes mesh extraction.",
     )
     p.add_argument(

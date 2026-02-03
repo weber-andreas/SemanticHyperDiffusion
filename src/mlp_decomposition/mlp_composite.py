@@ -194,6 +194,19 @@ class MLPComposite(nn.Module):
 
 
 def get_model(cfg, model_type="moe", output_type="occ"):
+
+    if model_type == "mlp_3d":
+        return MLP3D(
+            input_size=cfg.input_size,
+            hidden_neurons=cfg.hidden_neurons,
+            out_size=cfg.out_size,
+            use_leaky_relu=cfg.use_leaky_relu,
+            use_bias=cfg.use_bias,
+            multires=cfg.multires,
+            output_type=output_type,
+        )
+
+    # part specific MLPS
     distribution = cfg.part_distribution
     part_mlp_config = cfg.part_mlp_config
 
@@ -222,6 +235,8 @@ def get_model(cfg, model_type="moe", output_type="occ"):
         }
     if model_type == "moe":
         return MLPMoE(registry)
+    elif model_type == "moe_old":
+        return MLPMoE_old(registry)
     elif model_type == "composite":
         return MLPComposite(registry)
     else:
