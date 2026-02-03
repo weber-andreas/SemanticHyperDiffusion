@@ -7,6 +7,7 @@
 Based on the official implementation of ["HyperDiffusion: Generating Implicit Neural Fields with Weight-Space Diffusion" (ICCV 2023)](https://arxiv.org/abs/2303.17015).
 
 ## Method Overview
+![SemanticHyperdiffusion Overview](./docs/teaser_semanticHD.svg)
 
 We extend the HyperDiffusion framework by introducing a **semantically enriched weight-space diffusion process**. Instead of treating MLP parameters as a single undifferentiated vector, we explicitly decompose and model semantically related subsets of weights (e.g., wings, body, engine).
 
