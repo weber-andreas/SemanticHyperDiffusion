@@ -152,6 +152,6 @@ logs/
 
 .DS_Store
 ManifoldPlus/
-*.svg
 *.pth
 *.json
+*.svg
