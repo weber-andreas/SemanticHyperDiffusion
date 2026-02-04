@@ -79,13 +79,14 @@ We evaluate generation quality using the following metrics, primarily based on C
 
 This repository builds upon the original codebase. Key additions for the Semantic project include:
 
+*   **`src`**: Contains our code and everything we had to adapt from Hyperdiffusion.
 *   **`src/mlp_decomposition/`**: Contains the core logic for the Mixture of Experts (MoE) architecture and semantic loss functions.
 *   **`configs/`**: Contains specific configs for semantic overfitting (`overfit_plane_equal.yaml`) and diffusion (`train_plane_moe.yaml`).
 *   **`scripts/`**: Contains downstream application scripts and analysis tools.
 
 ## Acknowledgments
 
-This project is based on the work of Erkoç et al. (HyperDiffusion). We thank the original authors for open-sourcing their code.
+This project is based on the work of Erkoç et al. (HyperDiffusion). We thank the original authors and particularly our supervisor Ziya Erkoç for their code and guidance.
 
 **Citation for the original work:**
 ```bibtex
